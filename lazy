@@ -366,21 +366,88 @@ Quality: 1-100, default 85"
     success "Optimized: $(numfmt --to=iec $input_size 2>/dev/null || echo "${input_size} bytes") -> $(numfmt --to=iec $output_size 2>/dev/null || echo "${output_size} bytes") (${reduction}% reduction)"
 }
 
+cmd_image_batch_convert() {
+    local quality="85"
+    local format="jpg"
+    local inputs=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -q|--quality)
+                quality="$2"
+                shift 2
+                ;;
+            -f|--format)
+                format="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                inputs+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy image batch_convert <input...> [-f format] [-q quality]
+
+Batch convert images to another format.
+Supports wildcards (e.g., *.png)
+Output: <filename>_q<quality>.<format>
+
+Options:
+  -f, --format EXT  Output format (default: jpg)
+  -q, --quality N   Quality 1-100, applies to jpg/webp (default: 85)"
+
+    require_cmd convert
+
+    local count=0
+    local skipped=0
+
+    for input in "${inputs[@]}"; do
+        if [[ ! -f "$input" ]]; then
+            warn "File not found: $input"
+            ((++skipped))
+            continue
+        fi
+
+        local basename="${input%.*}"
+        local output="${basename}_q${quality}.${format}"
+
+        if [[ -f "$output" ]]; then
+            warn "Skipping $input (output exists: $output)"
+            ((++skipped))
+            continue
+        fi
+
+        convert "$input" -quality "$quality" "$output"
+        success "$input -> $output"
+        ((++count))
+    done
+
+    echo
+    info "Converted: $count, Skipped: $skipped"
+}
+
 cmd_image() {
     local subcmd="${1:-}"
     shift || true
 
     case "$subcmd" in
-        resize)   cmd_image_resize "$@" ;;
-        convert)  cmd_image_convert "$@" ;;
-        optimize) cmd_image_optimize "$@" ;;
+        resize)        cmd_image_resize "$@" ;;
+        convert)       cmd_image_convert "$@" ;;
+        optimize)      cmd_image_optimize "$@" ;;
+        batch_convert) cmd_image_batch_convert "$@" ;;
         *)
             echo "Usage: lazy image <command>
 
 Commands:
-  resize     Resize an image
-  convert    Convert image format
-  optimize   Optimize image file size"
+  resize         Resize an image
+  convert        Convert image format
+  optimize       Optimize image file size
+  batch_convert  Batch convert images to another format"
             if [[ -n "$subcmd" ]]; then
                 die "Unknown command: image $subcmd"
             fi
@@ -444,6 +511,7 @@ Examples:
   lazy image resize photo.jpg -w 800
   lazy image convert photo.png -o photo.webp
   lazy image optimize photo.jpg -q 80
+  lazy image batch_convert *.png -f webp -q 90
 
 Run 'lazy <command>' for command-specific help.
 EOF
