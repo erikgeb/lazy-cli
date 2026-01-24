@@ -1,0 +1,42 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+lazy is a bash CLI tool that wraps ghostscript and imagemagick to provide simple commands for PDF and image operations on macOS and Linux.
+
+## Commands
+
+```bash
+# Install dependencies
+make install-deps
+
+# Install CLI to /usr/local/bin
+make install
+
+# Run directly without installing
+./lazy doctor
+./lazy pdf compress test.pdf
+./lazy image resize test.jpg -w 800
+```
+
+## Architecture
+
+- `lazy` - Single bash script containing all CLI logic
+- `Makefile` - Handles dependency installation (detects OS and package manager) and CLI installation
+
+The CLI uses a command/subcommand pattern:
+- `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`)
+- `lazy image <subcommand>` - Image operations via imagemagick (`convert`)
+
+## Adding New Commands
+
+1. Add a `cmd_<category>_<action>` function (e.g., `cmd_pdf_split`)
+2. Add the subcommand case to the parent command function (e.g., `cmd_pdf`)
+3. Update help text in both the subcommand and main help
+
+## Dependencies
+
+- ghostscript: provides `gs` command for PDF manipulation
+- imagemagick: provides `convert` command for image manipulation

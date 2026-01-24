@@ -1,0 +1,445 @@
+#!/usr/bin/env bash
+#
+# lazy - A CLI tool for common file operations using ghostscript and imagemagick
+#
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="0.1.0"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Helper functions
+info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+success() { echo -e "${GREEN}[OK]${NC} $*"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+die() { error "$*"; exit 1; }
+
+# Check if a command exists
+require_cmd() {
+    local cmd="$1"
+    if ! command -v "$cmd" &> /dev/null; then
+        die "$cmd is not installed. Run 'make install-deps' to install dependencies."
+    fi
+}
+
+# Detect OS
+detect_os() {
+    case "$(uname -s)" in
+        Darwin*) echo "macos" ;;
+        Linux*)  echo "linux" ;;
+        *)       echo "unknown" ;;
+    esac
+}
+
+# ============================================================================
+# PDF Commands (using ghostscript)
+# ============================================================================
+
+cmd_pdf_compress() {
+    local input=""
+    local output=""
+    local quality="ebook"  # screen, ebook, printer, prepress
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -q|--quality)
+                quality="$2"
+                shift 2
+                ;;
+            -o|--output)
+                output="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                input="$1"
+                shift
+                ;;
+        esac
+    done
+
+    [[ -z "$input" ]] && die "Usage: lazy pdf compress <input.pdf> [-o output.pdf] [-q quality]
+
+Quality options:
+  screen   - lowest quality, smallest size (72 dpi)
+  ebook    - medium quality, good for reading (150 dpi) [default]
+  printer  - high quality for printing (300 dpi)
+  prepress - highest quality, preserves color (300 dpi)"
+
+    [[ ! -f "$input" ]] && die "File not found: $input"
+
+    require_cmd gs
+
+    # Default output name
+    if [[ -z "$output" ]]; then
+        local basename="${input%.*}"
+        local ext="${input##*.}"
+        output="${basename}_compressed.${ext}"
+    fi
+
+    info "Compressing $input -> $output (quality: $quality)"
+
+    gs -sDEVICE=pdfwrite \
+       -dCompatibilityLevel=1.4 \
+       -dPDFSETTINGS="/$quality" \
+       -dNOPAUSE \
+       -dQUIET \
+       -dBATCH \
+       -sOutputFile="$output" \
+       "$input"
+
+    local input_size=$(stat -f%z "$input" 2>/dev/null || stat -c%s "$input")
+    local output_size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output")
+    local reduction=$(( (input_size - output_size) * 100 / input_size ))
+
+    success "Compressed: $(numfmt --to=iec $input_size 2>/dev/null || echo "${input_size} bytes") -> $(numfmt --to=iec $output_size 2>/dev/null || echo "${output_size} bytes") (${reduction}% reduction)"
+}
+
+cmd_pdf_merge() {
+    local output=""
+    local inputs=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -o|--output)
+                output="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                inputs+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    [[ ${#inputs[@]} -lt 2 ]] && die "Usage: lazy pdf merge <input1.pdf> <input2.pdf> ... -o output.pdf"
+    [[ -z "$output" ]] && die "Output file required. Use -o <output.pdf>"
+
+    require_cmd gs
+
+    info "Merging ${#inputs[@]} PDFs -> $output"
+
+    gs -dBATCH \
+       -dNOPAUSE \
+       -dQUIET \
+       -sDEVICE=pdfwrite \
+       -sOutputFile="$output" \
+       "${inputs[@]}"
+
+    success "Created $output"
+}
+
+cmd_pdf() {
+    local subcmd="${1:-}"
+    shift || true
+
+    case "$subcmd" in
+        compress) cmd_pdf_compress "$@" ;;
+        merge)    cmd_pdf_merge "$@" ;;
+        *)
+            echo "Usage: lazy pdf <command>
+
+Commands:
+  compress   Compress a PDF file
+  merge      Merge multiple PDF files"
+            if [[ -n "$subcmd" ]]; then
+                die "Unknown command: pdf $subcmd"
+            fi
+            ;;
+    esac
+}
+
+# ============================================================================
+# Image Commands (using imagemagick)
+# ============================================================================
+
+cmd_image_resize() {
+    local input=""
+    local output=""
+    local size=""
+    local width=""
+    local height=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -o|--output)
+                output="$2"
+                shift 2
+                ;;
+            -s|--size)
+                size="$2"
+                shift 2
+                ;;
+            -w|--width)
+                width="$2"
+                shift 2
+                ;;
+            -h|--height)
+                height="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                input="$1"
+                shift
+                ;;
+        esac
+    done
+
+    [[ -z "$input" ]] && die "Usage: lazy image resize <input> [-o output] [-s WxH | -w width | -h height]
+
+Options:
+  -s, --size WxH      Resize to exact dimensions (e.g., 800x600)
+  -w, --width N       Resize to width, maintain aspect ratio
+  -h, --height N      Resize to height, maintain aspect ratio
+  -o, --output FILE   Output file (default: input_resized.ext)"
+
+    [[ ! -f "$input" ]] && die "File not found: $input"
+
+    require_cmd convert
+
+    # Default output name
+    if [[ -z "$output" ]]; then
+        local basename="${input%.*}"
+        local ext="${input##*.}"
+        output="${basename}_resized.${ext}"
+    fi
+
+    local geometry=""
+    if [[ -n "$size" ]]; then
+        geometry="$size!"
+    elif [[ -n "$width" ]]; then
+        geometry="${width}x"
+    elif [[ -n "$height" ]]; then
+        geometry="x${height}"
+    else
+        die "Specify -s, -w, or -h for resize dimensions"
+    fi
+
+    info "Resizing $input -> $output ($geometry)"
+
+    convert "$input" -resize "$geometry" "$output"
+
+    success "Created $output"
+}
+
+cmd_image_convert() {
+    local input=""
+    local output=""
+    local quality=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -o|--output)
+                output="$2"
+                shift 2
+                ;;
+            -q|--quality)
+                quality="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                input="$1"
+                shift
+                ;;
+        esac
+    done
+
+    [[ -z "$input" ]] && die "Usage: lazy image convert <input> -o <output> [-q quality]
+
+Output format is determined by the output file extension.
+Quality (1-100) applies to JPEG/WebP formats."
+
+    [[ ! -f "$input" ]] && die "File not found: $input"
+    [[ -z "$output" ]] && die "Output file required. Use -o <output>"
+
+    require_cmd convert
+
+    info "Converting $input -> $output"
+
+    local quality_args=()
+    if [[ -n "$quality" ]]; then
+        quality_args=(-quality "$quality")
+    fi
+
+    convert "$input" "${quality_args[@]}" "$output"
+
+    success "Created $output"
+}
+
+cmd_image_optimize() {
+    local input=""
+    local output=""
+    local quality="85"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -o|--output)
+                output="$2"
+                shift 2
+                ;;
+            -q|--quality)
+                quality="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                input="$1"
+                shift
+                ;;
+        esac
+    done
+
+    [[ -z "$input" ]] && die "Usage: lazy image optimize <input> [-o output] [-q quality]
+
+Optimizes image file size while maintaining reasonable quality.
+Quality: 1-100, default 85"
+
+    [[ ! -f "$input" ]] && die "File not found: $input"
+
+    require_cmd convert
+
+    # Default output name
+    if [[ -z "$output" ]]; then
+        local basename="${input%.*}"
+        local ext="${input##*.}"
+        output="${basename}_optimized.${ext}"
+    fi
+
+    info "Optimizing $input -> $output (quality: $quality)"
+
+    convert "$input" \
+        -strip \
+        -interlace Plane \
+        -quality "$quality" \
+        "$output"
+
+    local input_size=$(stat -f%z "$input" 2>/dev/null || stat -c%s "$input")
+    local output_size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output")
+    local reduction=$(( (input_size - output_size) * 100 / input_size ))
+
+    success "Optimized: $(numfmt --to=iec $input_size 2>/dev/null || echo "${input_size} bytes") -> $(numfmt --to=iec $output_size 2>/dev/null || echo "${output_size} bytes") (${reduction}% reduction)"
+}
+
+cmd_image() {
+    local subcmd="${1:-}"
+    shift || true
+
+    case "$subcmd" in
+        resize)   cmd_image_resize "$@" ;;
+        convert)  cmd_image_convert "$@" ;;
+        optimize) cmd_image_optimize "$@" ;;
+        *)
+            echo "Usage: lazy image <command>
+
+Commands:
+  resize     Resize an image
+  convert    Convert image format
+  optimize   Optimize image file size"
+            if [[ -n "$subcmd" ]]; then
+                die "Unknown command: image $subcmd"
+            fi
+            ;;
+    esac
+}
+
+# ============================================================================
+# Check/Doctor Commands
+# ============================================================================
+
+cmd_doctor() {
+    echo "lazy v$VERSION - System Check"
+    echo "=============================="
+    echo
+
+    local os=$(detect_os)
+    echo "OS: $os"
+    echo
+
+    echo "Dependencies:"
+
+    # Check ghostscript
+    if command -v gs &> /dev/null; then
+        local gs_version=$(gs --version 2>/dev/null || echo "unknown")
+        success "ghostscript $gs_version"
+    else
+        error "ghostscript not installed"
+    fi
+
+    # Check imagemagick
+    if command -v convert &> /dev/null; then
+        local im_version=$(convert --version 2>/dev/null | head -1 | awk '{print $3}' || echo "unknown")
+        success "imagemagick $im_version"
+    else
+        error "imagemagick not installed"
+    fi
+
+    echo
+    echo "Run 'make install-deps' to install missing dependencies."
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+show_help() {
+    cat <<EOF
+lazy v$VERSION - A CLI for common file operations
+
+Usage: lazy <command> [options]
+
+Commands:
+  pdf       PDF operations (compress, merge)
+  image     Image operations (resize, convert, optimize)
+  doctor    Check system dependencies
+
+Examples:
+  lazy pdf compress document.pdf -q ebook
+  lazy pdf merge file1.pdf file2.pdf -o merged.pdf
+  lazy image resize photo.jpg -w 800
+  lazy image convert photo.png -o photo.webp
+  lazy image optimize photo.jpg -q 80
+
+Run 'lazy <command>' for command-specific help.
+EOF
+}
+
+main() {
+    local cmd="${1:-}"
+    shift || true
+
+    case "$cmd" in
+        pdf)     cmd_pdf "$@" ;;
+        image)   cmd_image "$@" ;;
+        doctor)  cmd_doctor ;;
+        version) echo "lazy v$VERSION" ;;
+        help|--help|-h|"")
+            show_help
+            ;;
+        *)
+            die "Unknown command: $cmd. Run 'lazy help' for usage."
+            ;;
+    esac
+}
+
+main "$@"
