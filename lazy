@@ -30,6 +30,23 @@ require_cmd() {
     fi
 }
 
+# Confirm before overwriting an existing file
+confirm_overwrite() {
+    local file="$1"
+    if [[ -f "$file" ]]; then
+        warn "File already exists: $file"
+        read -r -p "Overwrite? [y/N] " response
+        case "$response" in
+            [yY][eE][sS]|[yY])
+                return 0
+                ;;
+            *)
+                die "Aborted."
+                ;;
+        esac
+    fi
+}
+
 # Detect OS
 detect_os() {
     case "$(uname -s)" in
@@ -87,6 +104,8 @@ Quality options:
         output="${basename}_compressed.${ext}"
     fi
 
+    confirm_overwrite "$output"
+
     info "Compressing $input -> $output (quality: $quality)"
 
     gs -sDEVICE=pdfwrite \
@@ -129,6 +148,7 @@ cmd_pdf_merge() {
     [[ -z "$output" ]] && die "Output file required. Use -o <output.pdf>"
 
     require_cmd gs
+    confirm_overwrite "$output"
 
     info "Merging ${#inputs[@]} PDFs -> $output"
 
@@ -231,6 +251,8 @@ Options:
         die "Specify -s, -w, or -h for resize dimensions"
     fi
 
+    confirm_overwrite "$output"
+
     info "Resizing $input -> $output ($geometry)"
 
     convert "$input" -resize "$geometry" "$output"
@@ -272,6 +294,7 @@ Quality (1-100) applies to JPEG/WebP formats."
     [[ -z "$output" ]] && die "Output file required. Use -o <output>"
 
     require_cmd convert
+    confirm_overwrite "$output"
 
     info "Converting $input -> $output"
 
@@ -325,6 +348,8 @@ Quality: 1-100, default 85"
         local ext="${input##*.}"
         output="${basename}_optimized.${ext}"
     fi
+
+    confirm_overwrite "$output"
 
     info "Optimizing $input -> $output (quality: $quality)"
 
