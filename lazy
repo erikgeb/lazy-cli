@@ -619,14 +619,14 @@ Options:
         # - Scale down if larger than max dimensions
         # - Maintain aspect ratio
         # - Ensure dimensions are divisible by 2 (required for H.264)
-        local scale_filter="scale='min(${max_width},iw)':min'(${max_height},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        local scale_filter="scale='min(${max_width},iw)':'min(${max_height},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
 
         ffmpeg -i "$input" \
             -c:v libx264 \
             -preset "$quality" \
             -crf 23 \
             -vf "$scale_filter" \
-            -max_muxing_queue_size 9999
+            -max_muxing_queue_size 9999 \
             -c:a aac \
             -b:a 128k \
             -movflags +faststart \
