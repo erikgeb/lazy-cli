@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="0.2.0"
+VERSION="0.3.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -535,6 +535,140 @@ Commands:
 }
 
 # ============================================================================
+# Video Commands (using ffmpeg)
+# ============================================================================
+
+cmd_video_convert() {
+    local inputs=()
+    local quality="medium"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -q|--quality)
+                quality="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                inputs+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy video convert <input...> [-q quality]
+
+Convert videos to MP4 (H.264) with max resolution 1280x720.
+Supports wildcards (e.g., *.mov)
+Output: <filename>.mp4
+
+Options:
+  -q, --quality PRESET  FFmpeg preset: ultrafast, fast, medium, slow (default: medium)
+                        Slower = better quality + smaller file, but longer encoding"
+
+    require_cmd ffmpeg
+
+    local count=0
+    local skipped=0
+
+    for input in "${inputs[@]}"; do
+        if [[ ! -f "$input" ]]; then
+            warn "File not found: $input"
+            ((++skipped))
+            continue
+        fi
+
+        local basename="${input%.*}"
+        local output="${basename}.mp4"
+
+        # Skip if input is already the output
+        if [[ "$input" == "$output" ]]; then
+            output="${basename}_converted.mp4"
+        fi
+
+        if [[ -f "$output" ]]; then
+            warn "Skipping $input (output exists: $output)"
+            ((++skipped))
+            continue
+        fi
+
+        info "Converting $input -> $output"
+
+        # Get video dimensions to determine orientation
+        local dimensions
+        dimensions=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "$input" 2>/dev/null)
+        local width height
+        width=$(echo "$dimensions" | cut -d'x' -f1)
+        height=$(echo "$dimensions" | cut -d'x' -f2)
+
+        # Determine max dimensions based on orientation
+        local max_width max_height
+        if [[ "$width" -ge "$height" ]]; then
+            # Landscape or square
+            max_width=1280
+            max_height=720
+        else
+            # Portrait/vertical
+            max_width=720
+            max_height=1280
+        fi
+
+        # Build scale filter:
+        # - Scale down if larger than max dimensions
+        # - Maintain aspect ratio
+        # - Ensure dimensions are divisible by 2 (required for H.264)
+        local scale_filter="scale='min(${max_width},iw)':min'(${max_height},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+
+        ffmpeg -i "$input" \
+            -c:v libx264 \
+            -preset "$quality" \
+            -crf 23 \
+            -vf "$scale_filter" \
+            -max_muxing_queue_size 9999
+            -c:a aac \
+            -b:a 128k \
+            -movflags +faststart \
+            -y \
+            "$output" \
+            2>/dev/null
+
+        if [[ $? -eq 0 ]]; then
+            local input_size output_size
+            input_size=$(stat -f%z "$input" 2>/dev/null || stat -c%s "$input")
+            output_size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output")
+            success "$input -> $output ($(numfmt --to=iec $input_size 2>/dev/null || echo "${input_size}B") -> $(numfmt --to=iec $output_size 2>/dev/null || echo "${output_size}B"))"
+            ((++count))
+        else
+            error "Failed to convert $input"
+            ((++skipped))
+        fi
+    done
+
+    echo
+    info "Converted: $count, Skipped: $skipped"
+}
+
+cmd_video() {
+    local subcmd="${1:-}"
+    shift || true
+
+    case "$subcmd" in
+        convert) cmd_video_convert "$@" ;;
+        *)
+            echo "Usage: lazy video <command>
+
+Commands:
+  convert    Convert videos to MP4 (H.264, max 720p)"
+            if [[ -n "$subcmd" ]]; then
+                die "Unknown command: video $subcmd"
+            fi
+            ;;
+    esac
+}
+
+# ============================================================================
 # Backup Commands (using rsync)
 # ============================================================================
 
@@ -767,6 +901,16 @@ cmd_doctor() {
         error "rsync not installed"
     fi
 
+    # Check ffmpeg
+    if command -v ffmpeg &> /dev/null; then
+        local ffmpeg_version
+        ffmpeg_version=$(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')
+        [[ -z "$ffmpeg_version" ]] && ffmpeg_version="unknown"
+        success "ffmpeg $ffmpeg_version"
+    else
+        error "ffmpeg not installed"
+    fi
+
     echo
     echo "Run 'make install-deps' to install missing dependencies."
 }
@@ -784,6 +928,7 @@ Usage: lazy <command> [options]
 Commands:
   pdf       PDF operations (compress, merge)
   image     Image operations (resize, convert, optimize, batch_convert)
+  video     Video operations (convert to MP4)
   backup    Backup operations (home)
   doctor    Check system dependencies
 
@@ -794,6 +939,7 @@ Examples:
   lazy image convert photo.png -o photo.webp
   lazy image optimize photo.jpg -q 80
   lazy image batch_convert *.png -f webp -q 90
+  lazy video convert *.mov
   lazy backup home /mnt/external
 
 Run 'lazy <command>' for command-specific help.
@@ -807,6 +953,7 @@ main() {
     case "$cmd" in
         pdf)     cmd_pdf "$@" ;;
         image)   cmd_image "$@" ;;
+        video)   cmd_video "$@" ;;
         backup)  cmd_backup "$@" ;;
         doctor)  cmd_doctor ;;
         version) echo "lazy v$VERSION" ;;

@@ -34,6 +34,10 @@ lazy image batch_convert *.png -f webp -q 90      # Batch convert to WebP
 lazy image batch_convert *.png -r 50              # Convert and resize to 50%
 lazy image batch_convert *.png -g                 # Batch convert to grayscale
 
+# Video operations
+lazy video convert video.mov                      # Convert to MP4 (H.264, max 720p)
+lazy video convert *.mov -q slow                  # Better quality, slower encoding
+
 # Backup operations
 lazy backup home /mnt/external                    # Backup home to external volume
 lazy backup home /mnt/external -n                 # Dry run (show what would transfer)
@@ -67,4 +71,5 @@ autoload -Uz compinit && compinit
 - macOS or Linux
 - ghostscript (for PDF operations)
 - imagemagick (for image operations)
+- ffmpeg (for video operations)
 - rsync (for backup operations)

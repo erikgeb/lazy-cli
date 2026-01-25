@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-lazy is a bash CLI tool that wraps ghostscript, imagemagick, and rsync to provide simple commands for PDF, image, and backup operations on macOS and Linux.
+lazy is a bash CLI tool that wraps ghostscript, imagemagick, ffmpeg, and rsync to provide simple commands for PDF, image, video, and backup operations on macOS and Linux.
 
 ## Commands
 
@@ -31,6 +31,7 @@ make install
 The CLI uses a command/subcommand pattern:
 - `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`)
 - `lazy image <subcommand>` - Image operations via imagemagick (`convert`)
+- `lazy video <subcommand>` - Video operations via ffmpeg
 - `lazy backup <subcommand>` - Backup operations via rsync
 
 Image commands use the `img_convert` wrapper function which applies common parameters (`-strip -interlace Plane`) to all conversions.
@@ -49,4 +50,5 @@ Configuration is stored in `~/.config/lazy/config` (e.g., last used backup volum
 
 - ghostscript: provides `gs` command for PDF manipulation
 - imagemagick: provides `convert` command for image manipulation
+- ffmpeg: provides video conversion and encoding
 - rsync: provides backup functionality with incremental sync

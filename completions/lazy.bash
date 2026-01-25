@@ -5,9 +5,10 @@ _lazy_completions() {
     local cur prev words cword
     _init_completion || return
 
-    local commands="pdf image backup doctor version help"
+    local commands="pdf image video backup doctor version help"
     local pdf_commands="compress merge"
     local image_commands="resize convert optimize batch_convert"
+    local video_commands="convert"
     local backup_commands="home"
 
     case "${cword}" in
@@ -21,6 +22,9 @@ _lazy_completions() {
                     ;;
                 image)
                     COMPREPLY=($(compgen -W "${image_commands}" -- "${cur}"))
+                    ;;
+                video)
+                    COMPREPLY=($(compgen -W "${video_commands}" -- "${cur}"))
                     ;;
                 backup)
                     COMPREPLY=($(compgen -W "${backup_commands}" -- "${cur}"))
@@ -128,6 +132,24 @@ _lazy_completions() {
                                 *)
                                     if [[ "${cur}" == -* ]]; then
                                         COMPREPLY=($(compgen -W "-f --format -q --quality -r --resize -g --gray" -- "${cur}"))
+                                    else
+                                        COMPREPLY=($(compgen -f -- "${cur}"))
+                                    fi
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                video)
+                    case "${subcmd}" in
+                        convert)
+                            case "${prev}" in
+                                -q|--quality)
+                                    COMPREPLY=($(compgen -W "ultrafast fast medium slow" -- "${cur}"))
+                                    ;;
+                                *)
+                                    if [[ "${cur}" == -* ]]; then
+                                        COMPREPLY=($(compgen -W "-q --quality" -- "${cur}"))
                                     else
                                         COMPREPLY=($(compgen -f -- "${cur}"))
                                     fi
