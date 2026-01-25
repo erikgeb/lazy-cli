@@ -19,6 +19,9 @@ make install
 ./lazy doctor
 ./lazy pdf compress test.pdf
 ./lazy image resize test.jpg -w 800
+./lazy image batch_convert *.png -f webp -g
+./lazy video convert *.mov
+./lazy backup home /mnt/external
 ```
 
 ## Architecture
@@ -34,7 +37,7 @@ The CLI uses a command/subcommand pattern:
 - `lazy video <subcommand>` - Video operations via ffmpeg
 - `lazy backup <subcommand>` - Backup operations via rsync
 
-Image commands use the `img_convert` wrapper function which applies common parameters (`-strip -interlace Plane`) to all conversions.
+Image commands use the `img_convert` wrapper function which applies common parameters (`-strip -interlace Plane`) to all conversions. Both `convert` and `batch_convert` support `-g/--gray` for grayscale conversion.
 
 Configuration is stored in `~/.config/lazy/config` (e.g., last used backup volume).
 
