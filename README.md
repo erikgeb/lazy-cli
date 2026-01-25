@@ -28,6 +28,8 @@ lazy image resize photo.jpg -w 800                # Resize to width 800px
 lazy image resize photo.jpg -s 800x600            # Resize to exact dimensions
 lazy image convert photo.png -o photo.webp        # Convert format
 lazy image optimize photo.jpg -q 80               # Optimize file size
+lazy image batch_convert *.png                    # Batch convert to JPG
+lazy image batch_convert *.png -f webp -q 90      # Batch convert to WebP
 ```
 
 ## PDF Quality Options

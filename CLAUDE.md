@@ -30,11 +30,14 @@ The CLI uses a command/subcommand pattern:
 - `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`)
 - `lazy image <subcommand>` - Image operations via imagemagick (`convert`)
 
+Image commands use the `img_convert` wrapper function which applies common parameters (`-strip -interlace Plane`) to all conversions.
+
 ## Adding New Commands
 
 1. Add a `cmd_<category>_<action>` function (e.g., `cmd_pdf_split`)
 2. Add the subcommand case to the parent command function (e.g., `cmd_pdf`)
 3. Update help text in both the subcommand and main help
+4. **Update README.md** with usage examples for the new command
 
 ## Dependencies
 
