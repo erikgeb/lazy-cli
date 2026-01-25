@@ -56,6 +56,13 @@ detect_os() {
     esac
 }
 
+# Imagemagick convert wrapper with common parameters
+# Usage: img_convert <input> [options...] <output>
+# Applies: -strip (remove metadata), -interlace Plane (progressive loading)
+img_convert() {
+    convert -strip -interlace Plane "$@"
+}
+
 # ============================================================================
 # PDF Commands (using ghostscript)
 # ============================================================================
@@ -255,7 +262,7 @@ Options:
 
     info "Resizing $input -> $output ($geometry)"
 
-    convert "$input" -resize "$geometry" "$output"
+    img_convert "$input" -resize "$geometry" "$output"
 
     success "Created $output"
 }
@@ -303,7 +310,7 @@ Quality (1-100) applies to JPEG/WebP formats."
         quality_args=(-quality "$quality")
     fi
 
-    convert "$input" "${quality_args[@]}" "$output"
+    img_convert "$input" "${quality_args[@]}" "$output"
 
     success "Created $output"
 }
@@ -353,11 +360,7 @@ Quality: 1-100, default 85"
 
     info "Optimizing $input -> $output (quality: $quality)"
 
-    convert "$input" \
-        -strip \
-        -interlace Plane \
-        -quality "$quality" \
-        "$output"
+    img_convert "$input" -quality "$quality" "$output"
 
     local input_size=$(stat -f%z "$input" 2>/dev/null || stat -c%s "$input")
     local output_size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output")
@@ -422,7 +425,7 @@ Options:
             continue
         fi
 
-        convert "$input" -quality "$quality" "$output"
+        img_convert "$input" -quality "$quality" "$output"
         success "$input -> $output"
         ((++count))
     done
