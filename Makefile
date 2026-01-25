@@ -1,7 +1,9 @@
-.PHONY: install install-deps install-deps-macos install-deps-linux uninstall help
+.PHONY: install install-deps install-deps-macos install-deps-linux install-completions uninstall help
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
+BASH_COMPLETION_DIR ?= $(PREFIX)/etc/bash_completion.d
+ZSH_COMPLETION_DIR ?= $(PREFIX)/share/zsh/site-functions
 
 # Detect OS
 UNAME_S := $(shell uname -s)
@@ -10,8 +12,8 @@ help:
 	@echo "lazy CLI - Makefile targets"
 	@echo ""
 	@echo "  make install-deps    Install system dependencies (ghostscript, imagemagick)"
-	@echo "  make install         Install lazy CLI to $(BINDIR)"
-	@echo "  make uninstall       Remove lazy CLI from $(BINDIR)"
+	@echo "  make install         Install lazy CLI and shell completions"
+	@echo "  make uninstall       Remove lazy CLI and completions"
 	@echo ""
 
 install-deps:
@@ -49,13 +51,33 @@ install-deps-linux:
 		exit 1; \
 	fi
 
-install: lazy
+install: lazy install-completions
 	@echo "Installing lazy to $(BINDIR)..."
 	@mkdir -p $(BINDIR)
 	@install -m 755 lazy $(BINDIR)/lazy
+	@echo ""
 	@echo "Installed! Run 'lazy doctor' to check dependencies."
+	@echo ""
+	@echo "Shell completions installed. To activate:"
+	@echo "  Bash: Add 'source $(BASH_COMPLETION_DIR)/lazy' to ~/.bashrc"
+	@echo "  Zsh:  Completions should work automatically. If not, add to ~/.zshrc:"
+	@echo "        fpath=($(ZSH_COMPLETION_DIR) \$$fpath)"
+	@echo "        autoload -Uz compinit && compinit"
+
+install-completions:
+	@echo "Installing shell completions..."
+	@mkdir -p $(BASH_COMPLETION_DIR)
+	@mkdir -p $(ZSH_COMPLETION_DIR)
+	@install -m 644 completions/lazy.bash $(BASH_COMPLETION_DIR)/lazy
+	@install -m 644 completions/_lazy $(ZSH_COMPLETION_DIR)/_lazy
+	@echo "Completions installed to:"
+	@echo "  Bash: $(BASH_COMPLETION_DIR)/lazy"
+	@echo "  Zsh:  $(ZSH_COMPLETION_DIR)/_lazy"
 
 uninstall:
 	@echo "Removing lazy from $(BINDIR)..."
 	@rm -f $(BINDIR)/lazy
+	@echo "Removing shell completions..."
+	@rm -f $(BASH_COMPLETION_DIR)/lazy
+	@rm -f $(ZSH_COMPLETION_DIR)/_lazy
 	@echo "Uninstalled."

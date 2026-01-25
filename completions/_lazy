@@ -1,0 +1,150 @@
+#compdef lazy
+# Zsh completion for lazy CLI
+# Install: copy to a directory in $fpath (e.g., /usr/local/share/zsh/site-functions/)
+
+_lazy() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :_lazy_commands' \
+        '*::arg:->args'
+
+    case $state in
+        args)
+            case $line[1] in
+                pdf)
+                    _lazy_pdf
+                    ;;
+                image)
+                    _lazy_image
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_lazy_commands() {
+    local commands=(
+        'pdf:PDF operations (compress, merge)'
+        'image:Image operations (resize, convert, optimize, batch_convert)'
+        'doctor:Check system dependencies'
+        'version:Show version'
+        'help:Show help'
+    )
+    _describe 'command' commands
+}
+
+_lazy_pdf() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :_lazy_pdf_commands' \
+        '*::arg:->args'
+
+    case $state in
+        args)
+            case $line[1] in
+                compress)
+                    _lazy_pdf_compress
+                    ;;
+                merge)
+                    _lazy_pdf_merge
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_lazy_pdf_commands() {
+    local commands=(
+        'compress:Compress a PDF file'
+        'merge:Merge multiple PDF files'
+    )
+    _describe 'pdf command' commands
+}
+
+_lazy_pdf_compress() {
+    _arguments \
+        '(-q --quality)'{-q,--quality}'[Compression quality]:quality:(screen ebook printer prepress)' \
+        '(-o --output)'{-o,--output}'[Output file]:output file:_files -g "*.pdf"' \
+        '*:input file:_files -g "*.pdf"'
+}
+
+_lazy_pdf_merge() {
+    _arguments \
+        '(-o --output)'{-o,--output}'[Output file]:output file:_files -g "*.pdf"' \
+        '*:input files:_files -g "*.pdf"'
+}
+
+_lazy_image() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :_lazy_image_commands' \
+        '*::arg:->args'
+
+    case $state in
+        args)
+            case $line[1] in
+                resize)
+                    _lazy_image_resize
+                    ;;
+                convert)
+                    _lazy_image_convert
+                    ;;
+                optimize)
+                    _lazy_image_optimize
+                    ;;
+                batch_convert)
+                    _lazy_image_batch_convert
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_lazy_image_commands() {
+    local commands=(
+        'resize:Resize an image'
+        'convert:Convert image format'
+        'optimize:Optimize image file size'
+        'batch_convert:Batch convert images to another format'
+    )
+    _describe 'image command' commands
+}
+
+_lazy_image_resize() {
+    _arguments \
+        '(-o --output)'{-o,--output}'[Output file]:output file:_files' \
+        '(-s --size)'{-s,--size}'[Exact dimensions (WxH)]:size:' \
+        '(-w --width)'{-w,--width}'[Width (maintain aspect ratio)]:width:' \
+        '(-h --height)'{-h,--height}'[Height (maintain aspect ratio)]:height:' \
+        '*:input file:_files -g "*.(*png|*jpg|*jpeg|*gif|*webp|*bmp|*tiff)"'
+}
+
+_lazy_image_convert() {
+    _arguments \
+        '(-o --output)'{-o,--output}'[Output file]:output file:_files' \
+        '(-q --quality)'{-q,--quality}'[Quality (1-100)]:quality:' \
+        '*:input file:_files -g "*.(png|jpg|jpeg|gif|webp|bmp|tiff)"'
+}
+
+_lazy_image_optimize() {
+    _arguments \
+        '(-o --output)'{-o,--output}'[Output file]:output file:_files' \
+        '(-q --quality)'{-q,--quality}'[Quality (1-100, default 85)]:quality:' \
+        '*:input file:_files -g "*.(png|jpg|jpeg|gif|webp|bmp|tiff)"'
+}
+
+_lazy_image_batch_convert() {
+    _arguments \
+        '(-f --format)'{-f,--format}'[Output format]:format:(jpg jpeg png webp gif bmp tiff)' \
+        '(-q --quality)'{-q,--quality}'[Quality (1-100, default 85)]:quality:' \
+        '(-r --resize)'{-r,--resize}'[Resize percentage]:resize:' \
+        '*:input files:_files -g "*.(png|jpg|jpeg|gif|webp|bmp|tiff)"'
+}
+
+_lazy "$@"

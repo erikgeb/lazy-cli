@@ -40,6 +40,21 @@ lazy image batch_convert *.png -r 50              # Convert and resize to 50%
 - `printer` - high quality (300 dpi)
 - `prepress` - highest quality, preserves color (300 dpi)
 
+## Shell Completions
+
+Shell completions are installed automatically with `make install`. To activate:
+
+**Bash:** Add to `~/.bashrc`:
+```bash
+source /usr/local/etc/bash_completion.d/lazy
+```
+
+**Zsh:** Completions should work automatically. If not, add to `~/.zshrc`:
+```zsh
+fpath=(/usr/local/share/zsh/site-functions $fpath)
+autoload -Uz compinit && compinit
+```
+
 ## Requirements
 
 - macOS or Linux

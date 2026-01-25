@@ -25,6 +25,8 @@ make install
 
 - `lazy` - Single bash script containing all CLI logic
 - `Makefile` - Handles dependency installation (detects OS and package manager) and CLI installation
+- `completions/lazy.bash` - Bash completion script
+- `completions/_lazy` - Zsh completion script
 
 The CLI uses a command/subcommand pattern:
 - `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`)
@@ -38,6 +40,7 @@ Image commands use the `img_convert` wrapper function which applies common param
 2. Add the subcommand case to the parent command function (e.g., `cmd_pdf`)
 3. Update help text in both the subcommand and main help
 4. **Update README.md** with usage examples for the new command
+5. **Update completion scripts** in `completions/` (both `lazy.bash` and `_lazy`)
 
 ## Dependencies
 
