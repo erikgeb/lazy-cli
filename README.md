@@ -30,6 +30,7 @@ lazy image convert photo.png -o photo.webp        # Convert format
 lazy image optimize photo.jpg -q 80               # Optimize file size
 lazy image batch_convert *.png                    # Batch convert to JPG
 lazy image batch_convert *.png -f webp -q 90      # Batch convert to WebP
+lazy image batch_convert *.png -r 50              # Convert and resize to 50%
 ```
 
 ## PDF Quality Options

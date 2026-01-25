@@ -372,6 +372,7 @@ Quality: 1-100, default 85"
 cmd_image_batch_convert() {
     local quality="85"
     local format="jpg"
+    local resize=""
     local inputs=()
 
     while [[ $# -gt 0 ]]; do
@@ -384,6 +385,10 @@ cmd_image_batch_convert() {
                 format="$2"
                 shift 2
                 ;;
+            -r|--resize)
+                resize="$2"
+                shift 2
+                ;;
             -*)
                 die "Unknown option: $1"
                 ;;
@@ -394,15 +399,16 @@ cmd_image_batch_convert() {
         esac
     done
 
-    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy image batch_convert <input...> [-f format] [-q quality]
+    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy image batch_convert <input...> [-f format] [-q quality] [-r resize]
 
 Batch convert images to another format.
 Supports wildcards (e.g., *.png)
-Output: <filename>_q<quality>.<format>
+Output: <filename>_q<quality>[_r<resize>].<format>
 
 Options:
   -f, --format EXT  Output format (default: jpg)
-  -q, --quality N   Quality 1-100, applies to jpg/webp (default: 85)"
+  -q, --quality N   Quality 1-100, applies to jpg/webp (default: 85)
+  -r, --resize N    Resize to N% of original dimensions (e.g., 50 for half size)"
 
     require_cmd convert
 
@@ -417,7 +423,11 @@ Options:
         fi
 
         local basename="${input%.*}"
-        local output="${basename}_q${quality}.${format}"
+        local output="${basename}_q${quality}"
+        if [[ -n "$resize" ]]; then
+            output="${output}_r${resize}"
+        fi
+        output="${output}.${format}"
 
         if [[ -f "$output" ]]; then
             warn "Skipping $input (output exists: $output)"
@@ -425,7 +435,12 @@ Options:
             continue
         fi
 
-        img_convert "$input" -quality "$quality" "$output"
+        local resize_args=()
+        if [[ -n "$resize" ]]; then
+            resize_args=(-resize "${resize}%")
+        fi
+
+        img_convert "$input" "${resize_args[@]}" -quality "$quality" "$output"
         success "$input -> $output"
         ((++count))
     done
