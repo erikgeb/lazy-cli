@@ -93,7 +93,7 @@ _lazy_completions() {
                                     ;;
                                 *)
                                     if [[ "${cur}" == -* ]]; then
-                                        COMPREPLY=($(compgen -W "-o --output -q --quality" -- "${cur}"))
+                                        COMPREPLY=($(compgen -W "-o --output -q --quality -g --gray" -- "${cur}"))
                                     else
                                         COMPREPLY=($(compgen -f -- "${cur}"))
                                     fi
@@ -127,7 +127,7 @@ _lazy_completions() {
                                     ;;
                                 *)
                                     if [[ "${cur}" == -* ]]; then
-                                        COMPREPLY=($(compgen -W "-f --format -q --quality -r --resize" -- "${cur}"))
+                                        COMPREPLY=($(compgen -W "-f --format -q --quality -r --resize -g --gray" -- "${cur}"))
                                     else
                                         COMPREPLY=($(compgen -f -- "${cur}"))
                                     fi

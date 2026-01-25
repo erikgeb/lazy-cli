@@ -133,6 +133,7 @@ _lazy_image_convert() {
     _arguments \
         '(-o --output)'{-o,--output}'[Output file]:output file:_files' \
         '(-q --quality)'{-q,--quality}'[Quality (1-100)]:quality:' \
+        '(-g --gray)'{-g,--gray}'[Convert to grayscale]' \
         '*:input file:_files -g "*.(png|jpg|jpeg|gif|webp|bmp|tiff)"'
 }
 
@@ -148,6 +149,7 @@ _lazy_image_batch_convert() {
         '(-f --format)'{-f,--format}'[Output format]:format:(jpg jpeg png webp gif bmp tiff)' \
         '(-q --quality)'{-q,--quality}'[Quality (1-100, default 85)]:quality:' \
         '(-r --resize)'{-r,--resize}'[Resize percentage]:resize:' \
+        '(-g --gray)'{-g,--gray}'[Convert to grayscale]' \
         '*:input files:_files -g "*.(png|jpg|jpeg|gif|webp|bmp|tiff)"'
 }
 

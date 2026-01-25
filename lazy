@@ -302,6 +302,7 @@ cmd_image_convert() {
     local input=""
     local output=""
     local quality=""
+    local grayscale=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -313,6 +314,10 @@ cmd_image_convert() {
                 quality="$2"
                 shift 2
                 ;;
+            -g|--gray)
+                grayscale="1"
+                shift
+                ;;
             -*)
                 die "Unknown option: $1"
                 ;;
@@ -323,10 +328,14 @@ cmd_image_convert() {
         esac
     done
 
-    [[ -z "$input" ]] && die "Usage: lazy image convert <input> -o <output> [-q quality]
+    [[ -z "$input" ]] && die "Usage: lazy image convert <input> -o <output> [-q quality] [-g]
 
 Output format is determined by the output file extension.
-Quality (1-100) applies to JPEG/WebP formats."
+
+Options:
+  -o, --output FILE   Output file (required)
+  -q, --quality N     Quality 1-100, applies to JPEG/WebP formats
+  -g, --gray          Convert to grayscale"
 
     [[ ! -f "$input" ]] && die "File not found: $input"
     [[ -z "$output" ]] && die "Output file required. Use -o <output>"
@@ -334,14 +343,21 @@ Quality (1-100) applies to JPEG/WebP formats."
     require_cmd convert
     confirm_overwrite "$output"
 
-    info "Converting $input -> $output"
+    local gray_info=""
+    [[ -n "$grayscale" ]] && gray_info=", grayscale"
+    info "Converting $input -> $output${gray_info}"
 
     local quality_args=()
     if [[ -n "$quality" ]]; then
         quality_args=(-quality "$quality")
     fi
 
-    img_convert "$input" "${quality_args[@]}" "$output"
+    local gray_args=()
+    if [[ -n "$grayscale" ]]; then
+        gray_args=(-colorspace Gray)
+    fi
+
+    img_convert "$input" "${gray_args[@]}" "${quality_args[@]}" "$output"
 
     success "Created $output"
 }
@@ -404,6 +420,7 @@ cmd_image_batch_convert() {
     local quality="85"
     local format="jpg"
     local resize=""
+    local grayscale=""
     local inputs=()
 
     while [[ $# -gt 0 ]]; do
@@ -420,6 +437,10 @@ cmd_image_batch_convert() {
                 resize="$2"
                 shift 2
                 ;;
+            -g|--gray)
+                grayscale="1"
+                shift
+                ;;
             -*)
                 die "Unknown option: $1"
                 ;;
@@ -430,16 +451,17 @@ cmd_image_batch_convert() {
         esac
     done
 
-    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy image batch_convert <input...> [-f format] [-q quality] [-r resize]
+    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy image batch_convert <input...> [-f format] [-q quality] [-r resize] [-g]
 
 Batch convert images to another format.
 Supports wildcards (e.g., *.png)
-Output: <filename>_q<quality>[_r<resize>].<format>
+Output: <filename>_q<quality>[_r<resize>][_gray].<format>
 
 Options:
   -f, --format EXT  Output format (default: jpg)
   -q, --quality N   Quality 1-100, applies to jpg/webp (default: 85)
-  -r, --resize N    Resize to N% of original dimensions (e.g., 50 for half size)"
+  -r, --resize N    Resize to N% of original dimensions (e.g., 50 for half size)
+  -g, --gray        Convert to grayscale"
 
     require_cmd convert
 
@@ -458,6 +480,9 @@ Options:
         if [[ -n "$resize" ]]; then
             output="${output}_r${resize}"
         fi
+        if [[ -n "$grayscale" ]]; then
+            output="${output}_gray"
+        fi
         output="${output}.${format}"
 
         if [[ -f "$output" ]]; then
@@ -471,7 +496,12 @@ Options:
             resize_args=(-resize "${resize}%")
         fi
 
-        img_convert "$input" "${resize_args[@]}" -quality "$quality" "$output"
+        local gray_args=()
+        if [[ -n "$grayscale" ]]; then
+            gray_args=(-colorspace Gray)
+        fi
+
+        img_convert "$input" "${resize_args[@]}" "${gray_args[@]}" -quality "$quality" "$output"
         success "$input -> $output"
         ((++count))
     done
