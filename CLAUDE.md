@@ -49,6 +49,29 @@ Configuration is stored in `~/.config/lazy/config` (e.g., last used backup volum
 4. **Update README.md** with usage examples for the new command
 5. **Update completion scripts** in `completions/` (both `lazy.bash` and `_lazy`)
 
+## Testing
+
+Tests use [bats-core](https://github.com/bats-core/bats-core) (Bash Automated Testing System).
+
+```bash
+# Install test dependencies
+make install-test-deps
+
+# Run all tests
+make test
+
+# Run tests for a specific module
+bats tests/image.bats
+```
+
+Test files:
+- `tests/test_helper.bash` - Common setup, teardown, and helper functions
+- `tests/lazy.bats` - Main CLI tests (help, version, doctor)
+- `tests/pdf.bats` - PDF command tests
+- `tests/image.bats` - Image command tests
+- `tests/video.bats` - Video command tests
+- `tests/backup.bats` - Backup command tests
+
 ## Dependencies
 
 - ghostscript: provides `gs` command for PDF manipulation

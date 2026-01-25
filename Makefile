@@ -1,4 +1,4 @@
-.PHONY: install install-deps install-deps-macos install-deps-linux install-completions uninstall help
+.PHONY: install install-deps install-deps-macos install-deps-linux install-completions uninstall help test test-unit install-test-deps
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
@@ -11,9 +11,11 @@ UNAME_S := $(shell uname -s)
 help:
 	@echo "lazy CLI - Makefile targets"
 	@echo ""
-	@echo "  make install-deps    Install system dependencies (ghostscript, imagemagick)"
-	@echo "  make install         Install lazy CLI and shell completions"
-	@echo "  make uninstall       Remove lazy CLI and completions"
+	@echo "  make install-deps       Install system dependencies"
+	@echo "  make install            Install lazy CLI and shell completions"
+	@echo "  make uninstall          Remove lazy CLI and completions"
+	@echo "  make test               Run all tests"
+	@echo "  make install-test-deps  Install test dependencies (bats-core)"
 	@echo ""
 
 install-deps:
@@ -90,3 +92,39 @@ uninstall:
 	@sudo rm -f $(BASH_COMPLETION_DIR)/lazy
 	@sudo rm -f $(ZSH_COMPLETION_DIR)/_lazy
 	@echo "Uninstalled."
+
+install-test-deps:
+	@echo "Installing test dependencies..."
+ifeq ($(UNAME_S),Darwin)
+	brew install bats-core
+else ifeq ($(UNAME_S),Linux)
+	@if command -v apt-get &> /dev/null; then \
+		sudo apt-get update && sudo apt-get install -y bats; \
+	elif command -v dnf &> /dev/null; then \
+		sudo dnf install -y bats; \
+	elif command -v pacman &> /dev/null; then \
+		sudo pacman -S --noconfirm bash-bats; \
+	else \
+		echo "Installing bats-core from git..."; \
+		git clone https://github.com/bats-core/bats-core.git /tmp/bats-core && \
+		cd /tmp/bats-core && sudo ./install.sh /usr/local && \
+		rm -rf /tmp/bats-core; \
+	fi
+endif
+	@echo "bats-core installed."
+
+test:
+	@if ! command -v bats &> /dev/null; then \
+		echo "Error: bats-core not installed. Run 'make install-test-deps' first."; \
+		exit 1; \
+	fi
+	@echo "Running tests..."
+	bats tests/
+
+test-unit:
+	@if ! command -v bats &> /dev/null; then \
+		echo "Error: bats-core not installed. Run 'make install-test-deps' first."; \
+		exit 1; \
+	fi
+	@echo "Running unit tests..."
+	bats tests/*.bats

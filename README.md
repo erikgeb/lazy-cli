@@ -66,6 +66,16 @@ fpath=(/usr/local/share/zsh/site-functions $fpath)
 autoload -Uz compinit && compinit
 ```
 
+## Testing
+
+```bash
+# Install test dependencies (bats-core)
+make install-test-deps
+
+# Run all tests
+make test
+```
+
 ## Requirements
 
 - macOS or Linux
