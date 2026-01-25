@@ -8,7 +8,7 @@ A CLI tool for common file operations using ghostscript and imagemagick.
 # Install system dependencies (ghostscript, imagemagick)
 make install-deps
 
-# Install the lazy CLI
+# Install the lazy CLI (requires sudo for system directories)
 make install
 ```
 

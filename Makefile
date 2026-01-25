@@ -51,10 +51,19 @@ install-deps-linux:
 		exit 1; \
 	fi
 
-install: lazy install-completions
+install: lazy
+	@if [ -f "$(BINDIR)/lazy" ]; then \
+		echo "Warning: $(BINDIR)/lazy already exists."; \
+		read -p "Overwrite? [y/N] " response; \
+		case "$$response" in \
+			[yY][eE][sS]|[yY]) ;; \
+			*) echo "Installation aborted."; exit 1 ;; \
+		esac; \
+	fi
+	@$(MAKE) install-completions
 	@echo "Installing lazy to $(BINDIR)..."
-	@mkdir -p $(BINDIR)
-	@install -m 755 lazy $(BINDIR)/lazy
+	@sudo mkdir -p $(BINDIR)
+	@sudo install -m 755 lazy $(BINDIR)/lazy
 	@echo ""
 	@echo "Installed! Run 'lazy doctor' to check dependencies."
 	@echo ""
@@ -66,18 +75,18 @@ install: lazy install-completions
 
 install-completions:
 	@echo "Installing shell completions..."
-	@mkdir -p $(BASH_COMPLETION_DIR)
-	@mkdir -p $(ZSH_COMPLETION_DIR)
-	@install -m 644 completions/lazy.bash $(BASH_COMPLETION_DIR)/lazy
-	@install -m 644 completions/_lazy $(ZSH_COMPLETION_DIR)/_lazy
+	@sudo mkdir -p $(BASH_COMPLETION_DIR)
+	@sudo mkdir -p $(ZSH_COMPLETION_DIR)
+	@sudo install -m 644 completions/lazy.bash $(BASH_COMPLETION_DIR)/lazy
+	@sudo install -m 644 completions/_lazy $(ZSH_COMPLETION_DIR)/_lazy
 	@echo "Completions installed to:"
 	@echo "  Bash: $(BASH_COMPLETION_DIR)/lazy"
 	@echo "  Zsh:  $(ZSH_COMPLETION_DIR)/_lazy"
 
 uninstall:
 	@echo "Removing lazy from $(BINDIR)..."
-	@rm -f $(BINDIR)/lazy
+	@sudo rm -f $(BINDIR)/lazy
 	@echo "Removing shell completions..."
-	@rm -f $(BASH_COMPLETION_DIR)/lazy
-	@rm -f $(ZSH_COMPLETION_DIR)/_lazy
+	@sudo rm -f $(BASH_COMPLETION_DIR)/lazy
+	@sudo rm -f $(ZSH_COMPLETION_DIR)/_lazy
 	@echo "Uninstalled."
