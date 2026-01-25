@@ -19,6 +19,9 @@ _lazy() {
                 image)
                     _lazy_image
                     ;;
+                backup)
+                    _lazy_backup
+                    ;;
             esac
             ;;
     esac
@@ -28,6 +31,7 @@ _lazy_commands() {
     local commands=(
         'pdf:PDF operations (compress, merge)'
         'image:Image operations (resize, convert, optimize, batch_convert)'
+        'backup:Backup operations (home)'
         'doctor:Check system dependencies'
         'version:Show version'
         'help:Show help'
@@ -145,6 +149,38 @@ _lazy_image_batch_convert() {
         '(-q --quality)'{-q,--quality}'[Quality (1-100, default 85)]:quality:' \
         '(-r --resize)'{-r,--resize}'[Resize percentage]:resize:' \
         '*:input files:_files -g "*.(png|jpg|jpeg|gif|webp|bmp|tiff)"'
+}
+
+_lazy_backup() {
+    local context state state_descr line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :_lazy_backup_commands' \
+        '*::arg:->args'
+
+    case $state in
+        args)
+            case $line[1] in
+                home)
+                    _lazy_backup_home
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_lazy_backup_commands() {
+    local commands=(
+        'home:Backup home directory to external volume'
+    )
+    _describe 'backup command' commands
+}
+
+_lazy_backup_home() {
+    _arguments \
+        '(-n --dry-run)'{-n,--dry-run}'[Show what would be transferred without doing it]' \
+        '*:volume path:_files -/'
 }
 
 _lazy "$@"

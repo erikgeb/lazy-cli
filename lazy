@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="0.1.0"
+VERSION="0.2.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -61,6 +61,37 @@ detect_os() {
 # Applies: -strip (remove metadata), -interlace Plane (progressive loading)
 img_convert() {
     convert -strip -interlace Plane "$@"
+}
+
+# Config file management
+CONFIG_DIR="${HOME}/.config/lazy"
+CONFIG_FILE="${CONFIG_DIR}/config"
+
+config_get() {
+    local key="$1"
+    local default="${2:-}"
+    if [[ -f "$CONFIG_FILE" ]]; then
+        local value
+        value=$(grep "^${key}=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2-)
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return
+        fi
+    fi
+    echo "$default"
+}
+
+config_set() {
+    local key="$1"
+    local value="$2"
+    mkdir -p "$CONFIG_DIR"
+    if [[ -f "$CONFIG_FILE" ]] && grep -q "^${key}=" "$CONFIG_FILE" 2>/dev/null; then
+        # Update existing key
+        sed -i.bak "s|^${key}=.*|${key}=${value}|" "$CONFIG_FILE" && rm -f "${CONFIG_FILE}.bak"
+    else
+        # Add new key
+        echo "${key}=${value}" >> "$CONFIG_FILE"
+    fi
 }
 
 # ============================================================================
@@ -474,6 +505,198 @@ Commands:
 }
 
 # ============================================================================
+# Backup Commands (using rsync)
+# ============================================================================
+
+cmd_backup_home() {
+    local volume=""
+    local dry_run=""
+    local last_volume
+    last_volume=$(config_get "backup_last_volume" "")
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--dry-run)
+                dry_run="--dry-run"
+                shift
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                volume="$1"
+                shift
+                ;;
+        esac
+    done
+
+    # If no volume specified, suggest last used or show help
+    if [[ -z "$volume" ]]; then
+        if [[ -n "$last_volume" ]]; then
+            echo "Last used volume: $last_volume"
+            read -r -p "Use this volume? [Y/n] " response
+            case "$response" in
+                [nN][oO]|[nN])
+                    die "Usage: lazy backup home <volume_path> [-n|--dry-run]"
+                    ;;
+                *)
+                    volume="$last_volume"
+                    ;;
+            esac
+        else
+            die "Usage: lazy backup home <volume_path> [-n|--dry-run]
+
+Backup home directory to an external volume using rsync.
+
+Arguments:
+  volume_path    Path to external volume (e.g., /mnt/backup, /Volumes/Backup)
+
+Options:
+  -n, --dry-run  Show what would be transferred without actually doing it"
+        fi
+    fi
+
+    # Validate volume exists and is a directory
+    [[ ! -d "$volume" ]] && die "Volume not found or not a directory: $volume"
+
+    require_cmd rsync
+
+    # Save as last used volume
+    config_set "backup_last_volume" "$volume"
+
+    # Generate log filename: "Backup_" + hostname + home_dir_name + volume_name + dry_run + .log
+    local home_name
+    home_name=$(basename "$HOME")
+    local volume_name
+    volume_name=$(basename "$volume")
+    local backup_name
+    backup_name=$(hostname)_${home_name}
+    local log_file="$HOME/Backup_${backup_name}_${volume_name}${dry_run}.log"
+
+    # Build exclude list for common unneeded files (macOS and Linux)
+    local excludes=(
+        # macOS system files
+        ".DS_Store"
+        ".Spotlight-V100"
+        ".Trashes"
+        ".fseventsd"
+        ".TemporaryItems"
+        ".AppleDouble"
+        ".LSOverride"
+        "._*"
+        ".DocumentRevisions-V100"
+        ".PKInstallSandboxManager"
+        ".PKInstallSandboxManager-SystemSoftware"
+        "Library/Logs/*"
+        "Library/Application Support/CrashReporter/*"
+        "Library/Application Support/MobileSync/Backup/*"
+        "Library/Safari/LocalStorage/*"
+        "Library/Safari/Databases/*"
+        ".Trash/*"
+
+        # Linux system files
+        ".local/share/Trash/*"
+        ".thumbnails/*"
+        ".local/share/gvfs-metadata/*"
+        ".xsession-errors*"
+        ".recently-used.xbel"
+
+        # Common development caches
+        "node_modules"
+        ".npm/*"
+        ".pnpm-store/*"
+        "__pycache__"
+        ".pytest_cache"
+        "*.pyc"
+        ".venv/*"
+        "venv/*"
+        ".tox/*"
+        ".mypy_cache/*"
+        ".ruff_cache/*"
+        "target/debug/*"
+        "target/release/*"
+        ".cargo/registry/*"
+        ".gradle/*"
+        ".m2/repository/*"
+
+        # IDE and editor caches
+        ".vscode/extensions/*"
+
+        # Cache folders
+        "cache/"
+        ".cache/"
+        "**Cache/"
+        "caches/"
+        "cached/"
+        "Caches/"
+        "Cache[A-Z]**" #CacheStorage and similar
+        "Cached[A-Z]**" #CachedData and similar
+        "htmlcache/"
+        "librarycache/"
+        "appcache/"
+        "*.cache"
+        "*-cache"
+
+        # Docker
+        ".docker/buildx/*"
+
+        # Misc
+        "*.log"
+        "*.tmp"
+        ".git/objects/*"
+    )
+
+    local exclude_args=()
+    for pattern in "${excludes[@]}"; do
+        exclude_args+=(--exclude="$pattern")
+    done
+
+    info "Backing up $HOME -> $volume"
+    if [[ -n "$dry_run" ]]; then
+        warn "DRY RUN - no files will be transferred"
+    fi
+    info "Log file: $log_file"
+    echo
+
+    # Run rsync with archive mode, delete, and exclusions
+    rsync -av --delete \
+        "${exclude_args[@]}" \
+        $dry_run \
+        "$HOME/" \
+        "${volume}/Backup/${backup_name}/" \
+        2>&1 | tee "$log_file"
+
+    local rsync_status=${PIPESTATUS[0]}
+
+    echo
+    if [[ $rsync_status -eq 0 ]]; then
+        success "Backup completed successfully"
+        info "Log saved to: $log_file"
+    else
+        error "Backup completed with errors (exit code: $rsync_status)"
+        info "Check log for details: $log_file"
+    fi
+}
+
+cmd_backup() {
+    local subcmd="${1:-}"
+    shift || true
+
+    case "$subcmd" in
+        home) cmd_backup_home "$@" ;;
+        *)
+            echo "Usage: lazy backup <command>
+
+Commands:
+  home    Backup home directory to external volume"
+            if [[ -n "$subcmd" ]]; then
+                die "Unknown command: backup $subcmd"
+            fi
+            ;;
+    esac
+}
+
+# ============================================================================
 # Check/Doctor Commands
 # ============================================================================
 
@@ -504,6 +727,16 @@ cmd_doctor() {
         error "imagemagick not installed"
     fi
 
+    # Check rsync
+    if command -v rsync &> /dev/null; then
+        local rsync_version
+        rsync_version=$(set +o pipefail; rsync --version 2>/dev/null | head -1 | awk '{for(i=1;i<=NF;i++) if($i~/^[0-9]+\.[0-9]+/) {print $i; exit}}')
+        [[ -z "$rsync_version" ]] && rsync_version="unknown"
+        success "rsync $rsync_version"
+    else
+        error "rsync not installed"
+    fi
+
     echo
     echo "Run 'make install-deps' to install missing dependencies."
 }
@@ -520,7 +753,8 @@ Usage: lazy <command> [options]
 
 Commands:
   pdf       PDF operations (compress, merge)
-  image     Image operations (resize, convert, optimize)
+  image     Image operations (resize, convert, optimize, batch_convert)
+  backup    Backup operations (home)
   doctor    Check system dependencies
 
 Examples:
@@ -530,6 +764,7 @@ Examples:
   lazy image convert photo.png -o photo.webp
   lazy image optimize photo.jpg -q 80
   lazy image batch_convert *.png -f webp -q 90
+  lazy backup home /mnt/external
 
 Run 'lazy <command>' for command-specific help.
 EOF
@@ -542,6 +777,7 @@ main() {
     case "$cmd" in
         pdf)     cmd_pdf "$@" ;;
         image)   cmd_image "$@" ;;
+        backup)  cmd_backup "$@" ;;
         doctor)  cmd_doctor ;;
         version) echo "lazy v$VERSION" ;;
         help|--help|-h|"")

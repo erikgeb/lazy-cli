@@ -1,11 +1,11 @@
 # lazy
 
-A CLI tool for common file operations using ghostscript and imagemagick.
+A CLI tool for common file operations using ghostscript, imagemagick, and rsync.
 
 ## Installation
 
 ```bash
-# Install system dependencies (ghostscript, imagemagick)
+# Install system dependencies (ghostscript, imagemagick, rsync)
 make install-deps
 
 # Install the lazy CLI (requires sudo for system directories)
@@ -31,6 +31,11 @@ lazy image optimize photo.jpg -q 80               # Optimize file size
 lazy image batch_convert *.png                    # Batch convert to JPG
 lazy image batch_convert *.png -f webp -q 90      # Batch convert to WebP
 lazy image batch_convert *.png -r 50              # Convert and resize to 50%
+
+# Backup operations
+lazy backup home /mnt/external                    # Backup home to external volume
+lazy backup home /mnt/external -n                 # Dry run (show what would transfer)
+lazy backup home                                  # Use last volume (if previously set)
 ```
 
 ## PDF Quality Options
@@ -60,3 +65,4 @@ autoload -Uz compinit && compinit
 - macOS or Linux
 - ghostscript (for PDF operations)
 - imagemagick (for image operations)
+- rsync (for backup operations)

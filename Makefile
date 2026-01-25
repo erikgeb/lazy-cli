@@ -32,20 +32,20 @@ install-deps-macos:
 		echo "Error: Homebrew is required. Install from https://brew.sh"; \
 		exit 1; \
 	fi
-	brew install ghostscript imagemagick
+	brew install ghostscript imagemagick rsync
 
 install-deps-linux:
 	@echo "Installing dependencies on Linux..."
 	@if command -v apt-get &> /dev/null; then \
-		sudo apt-get update && sudo apt-get install -y ghostscript imagemagick; \
+		sudo apt-get update && sudo apt-get install -y ghostscript imagemagick rsync; \
 	elif command -v dnf &> /dev/null; then \
-		sudo dnf install -y ghostscript ImageMagick; \
+		sudo dnf install -y ghostscript ImageMagick rsync; \
 	elif command -v yum &> /dev/null; then \
-		sudo yum install -y ghostscript ImageMagick; \
+		sudo yum install -y ghostscript ImageMagick rsync; \
 	elif command -v pacman &> /dev/null; then \
-		sudo pacman -S --noconfirm ghostscript imagemagick; \
+		sudo pacman -S --noconfirm ghostscript imagemagick rsync; \
 	elif command -v zypper &> /dev/null; then \
-		sudo zypper install -y ghostscript ImageMagick; \
+		sudo zypper install -y ghostscript ImageMagick rsync; \
 	else \
 		echo "Error: No supported package manager found (apt, dnf, yum, pacman, zypper)"; \
 		exit 1; \

@@ -5,9 +5,10 @@ _lazy_completions() {
     local cur prev words cword
     _init_completion || return
 
-    local commands="pdf image doctor version help"
+    local commands="pdf image backup doctor version help"
     local pdf_commands="compress merge"
     local image_commands="resize convert optimize batch_convert"
+    local backup_commands="home"
 
     case "${cword}" in
         1)
@@ -20,6 +21,9 @@ _lazy_completions() {
                     ;;
                 image)
                     COMPREPLY=($(compgen -W "${image_commands}" -- "${cur}"))
+                    ;;
+                backup)
+                    COMPREPLY=($(compgen -W "${backup_commands}" -- "${cur}"))
                     ;;
             esac
             ;;
@@ -129,6 +133,17 @@ _lazy_completions() {
                                     fi
                                     ;;
                             esac
+                            ;;
+                    esac
+                    ;;
+                backup)
+                    case "${subcmd}" in
+                        home)
+                            if [[ "${cur}" == -* ]]; then
+                                COMPREPLY=($(compgen -W "-n --dry-run" -- "${cur}"))
+                            else
+                                COMPREPLY=($(compgen -d -- "${cur}"))
+                            fi
                             ;;
                     esac
                     ;;
