@@ -21,6 +21,11 @@ setup() {
     echo "cache data" > "${TEST_TMP}/mock_home/.cache/cache.dat"
     echo "node module" > "${TEST_TMP}/mock_home/node_modules/module.js"
 
+    # Point HOME at the mock so backups (and config) never touch the real
+    # home directory. On macOS rsync over the real home also trips TCC
+    # folder-access prompts and partial-transfer exit codes.
+    export HOME="${TEST_TMP}/mock_home"
+
     # Create backup destination
     mkdir -p "${TEST_TMP}/backup_dest"
 
@@ -97,6 +102,23 @@ setup() {
     [ "$status" -eq 0 ]
     # Should show info about the backup
     assert_output_contains "Backing up"
+}
+
+@test "backup home reports partial-transfer errors without aborting" {
+    # Root bypasses file permissions, so an unreadable file can't be forced.
+    [ "$(id -u)" -eq 0 ] && skip "cannot restrict file permissions as root"
+
+    # Make one source file unreadable so rsync cannot transfer it. rsync exits
+    # with a partial-transfer code (23); the script must surface that
+    # gracefully rather than letting `set -e` abort it.
+    chmod 000 "${TEST_TMP}/mock_home/test.txt"
+    run_lazy backup home "${TEST_TMP}/backup_dest"
+    # Restore perms so teardown can clean up regardless of assertions below.
+    chmod 644 "${TEST_TMP}/mock_home/test.txt"
+
+    # The CLI itself should exit cleanly after reporting the rsync error.
+    [ "$status" -eq 0 ]
+    assert_output_contains "Backup completed with errors"
 }
 
 # =============================================================================

@@ -751,15 +751,26 @@ Options:
     info "Log file: $log_file"
     echo
 
-    # Run rsync with archive mode, delete, and exclusions
+    # rsync only creates the final destination component, so ensure the full
+    # path exists (a fresh volume has no Backup/ dir). Skip on dry runs to
+    # avoid touching the destination.
+    if [[ -z "$dry_run" ]]; then
+        mkdir -p "${volume}/Backup/${backup_name}"
+    fi
+
+    # Run rsync with archive mode, delete, and exclusions.
+    # Disable errexit around the pipeline: rsync legitimately returns non-zero
+    # for partial transfers (e.g. 23/24 when some files are unreadable), and we
+    # want to report that gracefully rather than have `set -e` abort the script.
+    set +e
     rsync -av --delete \
         "${exclude_args[@]}" \
         $dry_run \
         "$HOME/" \
         "${volume}/Backup/${backup_name}/" \
         2>&1 | tee "$log_file"
-
     local rsync_status=${PIPESTATUS[0]}
+    set -e
 
     echo
     if [[ $rsync_status -eq 0 ]]; then
