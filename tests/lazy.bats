@@ -55,10 +55,7 @@ load 'test_helper'
 @test "lazy image without subcommand shows help" {
     run_lazy image
     assert_output_contains "Usage: lazy image"
-    assert_output_contains "resize"
     assert_output_contains "convert"
-    assert_output_contains "optimize"
-    assert_output_contains "batch_convert"
     [ "$status" -eq 0 ]
 }
 

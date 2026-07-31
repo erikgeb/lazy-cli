@@ -18,9 +18,9 @@ make install
 # Run directly without installing
 ./lazy doctor
 ./lazy pdf compress test.pdf
-./lazy image resize test.jpg -w 800
-./lazy image batch_convert *.png -f webp -g
-./lazy video convert *.mov
+./lazy image convert test.jpg -w 800
+./lazy image convert *.png -f webp -g
+./lazy video convert *.mov -c h264 -r 1080p
 ./lazy backup home /mnt/external
 ```
 
@@ -32,12 +32,14 @@ make install
 - `completions/_lazy` - Zsh completion script
 
 The CLI uses a command/subcommand pattern:
-- `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`)
-- `lazy image <subcommand>` - Image operations via imagemagick (`convert`)
-- `lazy video <subcommand>` - Video operations via ffmpeg
-- `lazy backup <subcommand>` - Backup operations via rsync
+- `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`): `compress`, `merge`
+- `lazy image convert` - Image operations via imagemagick: format, quality, grayscale, and resizing (percentage `-r` or exact pixels `-s`/`-w`/`-h`) in one command
+- `lazy video convert` - Video operations via ffmpeg: H.265 (default) or H.264 (`-c`), quality mode (`-m`), and optional resolution cap (`-r`)
+- `lazy backup <subcommand>` - Backup operations via rsync: `home`
 
-Image commands use the `img_convert` wrapper function which applies common parameters (`-strip -interlace Plane`) to all conversions. Both `convert` and `batch_convert` support `-g/--gray` for grayscale conversion.
+Image conversions go through the `img_convert` wrapper, which applies common parameters (`-strip -interlace Plane`).
+
+Every command writes output next to the input and never overwrites: `unique_path` returns a non-conflicting name using the macOS Finder convention (`foo.ext`, then `foo 2.ext`, ...). There is no overwrite prompt or skip-if-exists behavior.
 
 Configuration is stored in `~/.config/lazy/config` (e.g., last used backup volume).
 

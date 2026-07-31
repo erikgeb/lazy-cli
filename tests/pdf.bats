@@ -78,13 +78,12 @@ setup() {
     assert_file_exists "${TEST_TMP}/longout.pdf"
 }
 
-@test "pdf compress prompts before overwriting existing file" {
-    # Create output file first
+@test "pdf compress does not overwrite; writes a numbered file instead" {
+    # Pre-existing output must be left untouched; a numbered variant is created.
     touch "${TEST_TMP}/existing.pdf"
-    # Run with 'n' input to decline overwrite
-    run bash -c "echo 'n' | $LAZY_CMD pdf compress '${TEST_TMP}/test.pdf' -o '${TEST_TMP}/existing.pdf'"
-    assert_output_contains "already exists"
-    [ "$status" -eq 1 ]
+    run_lazy pdf compress "${TEST_TMP}/test.pdf" -o "${TEST_TMP}/existing.pdf"
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/existing 2.pdf"
 }
 
 # =============================================================================
@@ -115,11 +114,11 @@ setup() {
     assert_file_exists "${TEST_TMP}/merged2.pdf"
 }
 
-@test "pdf merge prompts before overwriting existing file" {
+@test "pdf merge does not overwrite; writes a numbered file instead" {
     touch "${TEST_TMP}/existing_merge.pdf"
-    run bash -c "echo 'n' | $LAZY_CMD pdf merge '${TEST_TMP}/test.pdf' '${TEST_TMP}/test2.pdf' -o '${TEST_TMP}/existing_merge.pdf'"
-    assert_output_contains "already exists"
-    [ "$status" -eq 1 ]
+    run_lazy pdf merge "${TEST_TMP}/test.pdf" "${TEST_TMP}/test2.pdf" -o "${TEST_TMP}/existing_merge.pdf"
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/existing_merge 2.pdf"
 }
 
 # =============================================================================

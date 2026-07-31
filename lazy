@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="0.3.0"
+VERSION="0.4.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -30,21 +30,26 @@ require_cmd() {
     fi
 }
 
-# Confirm before overwriting an existing file
-confirm_overwrite() {
-    local file="$1"
-    if [[ -f "$file" ]]; then
-        warn "File already exists: $file"
-        read -r -p "Overwrite? [y/N] " response
-        case "$response" in
-            [yY][eE][sS]|[yY])
-                return 0
-                ;;
-            *)
-                die "Aborted."
-                ;;
-        esac
+# Return a non-conflicting output path using the macOS Finder convention:
+# "foo.ext" if free, otherwise "foo 2.ext", "foo 3.ext", ... This lets every
+# command write output without ever prompting or clobbering an existing file.
+unique_path() {
+    local path="$1"
+    [[ ! -e "$path" ]] && { printf '%s\n' "$path"; return; }
+    local dir base name ext n=2
+    dir="$(dirname "$path")"
+    base="$(basename "$path")"
+    if [[ "$base" == *.* ]]; then
+        name="${base%.*}"
+        ext=".${base##*.}"
+    else
+        name="$base"
+        ext=""
     fi
+    while [[ -e "$dir/$name $n$ext" ]]; do
+        ((n++))
+    done
+    printf '%s\n' "$dir/$name $n$ext"
 }
 
 # Detect OS
@@ -56,11 +61,23 @@ detect_os() {
     esac
 }
 
-# Imagemagick convert wrapper with common parameters
+# Resolve the ImageMagick CLI binary once: prefer `magick` (ImageMagick 7),
+# fall back to `convert` (ImageMagick 6, where `magick` does not exist).
+if command -v magick &> /dev/null; then
+    MAGICK="magick"
+else
+    MAGICK="convert"
+fi
+
+# Imagemagick wrapper with common parameters
 # Usage: img_convert <input> [options...] <output>
 # Applies: -strip (remove metadata), -interlace Plane (progressive loading)
+# The common options go *after* the input: under ImageMagick 7 `-strip` is an
+# image operator and errors if it appears before any image is loaded.
 img_convert() {
-    convert -strip -interlace Plane "$@"
+    local input="$1"
+    shift
+    "$MAGICK" "$input" -strip -interlace Plane "$@"
 }
 
 # Config file management
@@ -142,7 +159,7 @@ Quality options:
         output="${basename}_compressed.${ext}"
     fi
 
-    confirm_overwrite "$output"
+    output="$(unique_path "$output")"
 
     info "Compressing $input -> $output (quality: $quality)"
 
@@ -186,7 +203,7 @@ cmd_pdf_merge() {
     [[ -z "$output" ]] && die "Output file required. Use -o <output.pdf>"
 
     require_cmd gs
-    confirm_overwrite "$output"
+    output="$(unique_path "$output")"
 
     info "Merging ${#inputs[@]} PDFs -> $output"
 
@@ -224,203 +241,15 @@ Commands:
 # Image Commands (using imagemagick)
 # ============================================================================
 
-cmd_image_resize() {
-    local input=""
-    local output=""
-    local size=""
-    local width=""
-    local height=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -o|--output)
-                output="$2"
-                shift 2
-                ;;
-            -s|--size)
-                size="$2"
-                shift 2
-                ;;
-            -w|--width)
-                width="$2"
-                shift 2
-                ;;
-            -h|--height)
-                height="$2"
-                shift 2
-                ;;
-            -*)
-                die "Unknown option: $1"
-                ;;
-            *)
-                input="$1"
-                shift
-                ;;
-        esac
-    done
-
-    [[ -z "$input" ]] && die "Usage: lazy image resize <input> [-o output] [-s WxH | -w width | -h height]
-
-Options:
-  -s, --size WxH      Resize to exact dimensions (e.g., 800x600)
-  -w, --width N       Resize to width, maintain aspect ratio
-  -h, --height N      Resize to height, maintain aspect ratio
-  -o, --output FILE   Output file (default: input_resized.ext)"
-
-    [[ ! -f "$input" ]] && die "File not found: $input"
-
-    require_cmd convert
-
-    # Default output name
-    if [[ -z "$output" ]]; then
-        local basename="${input%.*}"
-        local ext="${input##*.}"
-        output="${basename}_resized.${ext}"
-    fi
-
-    local geometry=""
-    if [[ -n "$size" ]]; then
-        geometry="$size!"
-    elif [[ -n "$width" ]]; then
-        geometry="${width}x"
-    elif [[ -n "$height" ]]; then
-        geometry="x${height}"
-    else
-        die "Specify -s, -w, or -h for resize dimensions"
-    fi
-
-    confirm_overwrite "$output"
-
-    info "Resizing $input -> $output ($geometry)"
-
-    img_convert "$input" -resize "$geometry" "$output"
-
-    success "Created $output"
-}
-
 cmd_image_convert() {
-    local input=""
-    local output=""
-    local quality=""
-    local grayscale=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -o|--output)
-                output="$2"
-                shift 2
-                ;;
-            -q|--quality)
-                quality="$2"
-                shift 2
-                ;;
-            -g|--gray)
-                grayscale="1"
-                shift
-                ;;
-            -*)
-                die "Unknown option: $1"
-                ;;
-            *)
-                input="$1"
-                shift
-                ;;
-        esac
-    done
-
-    [[ -z "$input" ]] && die "Usage: lazy image convert <input> -o <output> [-q quality] [-g]
-
-Output format is determined by the output file extension.
-
-Options:
-  -o, --output FILE   Output file (required)
-  -q, --quality N     Quality 1-100, applies to JPEG/WebP formats
-  -g, --gray          Convert to grayscale"
-
-    [[ ! -f "$input" ]] && die "File not found: $input"
-    [[ -z "$output" ]] && die "Output file required. Use -o <output>"
-
-    require_cmd convert
-    confirm_overwrite "$output"
-
-    local gray_info=""
-    [[ -n "$grayscale" ]] && gray_info=", grayscale"
-    info "Converting $input -> $output${gray_info}"
-
-    local quality_args=()
-    if [[ -n "$quality" ]]; then
-        quality_args=(-quality "$quality")
-    fi
-
-    local gray_args=()
-    if [[ -n "$grayscale" ]]; then
-        gray_args=(-colorspace Gray)
-    fi
-
-    img_convert "$input" "${gray_args[@]}" "${quality_args[@]}" "$output"
-
-    success "Created $output"
-}
-
-cmd_image_optimize() {
-    local input=""
-    local output=""
-    local quality="85"
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -o|--output)
-                output="$2"
-                shift 2
-                ;;
-            -q|--quality)
-                quality="$2"
-                shift 2
-                ;;
-            -*)
-                die "Unknown option: $1"
-                ;;
-            *)
-                input="$1"
-                shift
-                ;;
-        esac
-    done
-
-    [[ -z "$input" ]] && die "Usage: lazy image optimize <input> [-o output] [-q quality]
-
-Optimizes image file size while maintaining reasonable quality.
-Quality: 1-100, default 85"
-
-    [[ ! -f "$input" ]] && die "File not found: $input"
-
-    require_cmd convert
-
-    # Default output name
-    if [[ -z "$output" ]]; then
-        local basename="${input%.*}"
-        local ext="${input##*.}"
-        output="${basename}_optimized.${ext}"
-    fi
-
-    confirm_overwrite "$output"
-
-    info "Optimizing $input -> $output (quality: $quality)"
-
-    img_convert "$input" -quality "$quality" "$output"
-
-    local input_size=$(stat -f%z "$input" 2>/dev/null || stat -c%s "$input")
-    local output_size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output")
-    local reduction=$(( (input_size - output_size) * 100 / input_size ))
-
-    success "Optimized: $(numfmt --to=iec $input_size 2>/dev/null || echo "${input_size} bytes") -> $(numfmt --to=iec $output_size 2>/dev/null || echo "${output_size} bytes") (${reduction}% reduction)"
-}
-
-cmd_image_batch_convert() {
     local quality="85"
     local format="jpg"
     local resize=""
+    local size=""
+    local width=""
+    local height=""
     local grayscale=""
+    local output=""
     local inputs=()
 
     while [[ $# -gt 0 ]]; do
@@ -437,9 +266,25 @@ cmd_image_batch_convert() {
                 resize="$2"
                 shift 2
                 ;;
+            -s|--size)
+                size="$2"
+                shift 2
+                ;;
+            -w|--width)
+                width="$2"
+                shift 2
+                ;;
+            -h|--height)
+                height="$2"
+                shift 2
+                ;;
             -g|--gray)
                 grayscale="1"
                 shift
+                ;;
+            -o|--output)
+                output="$2"
+                shift 2
                 ;;
             -*)
                 die "Unknown option: $1"
@@ -451,19 +296,52 @@ cmd_image_batch_convert() {
         esac
     done
 
-    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy image batch_convert <input...> [-f format] [-q quality] [-r resize] [-g]
+    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy image convert <input...> [-f format] [-q quality] [resize] [-g] [-o output]
 
-Batch convert images to another format.
-Supports wildcards (e.g., *.png)
-Output: <filename>_q<quality>[_r<resize>][_gray].<format>
+Convert and/or resize one or more images. Supports wildcards (e.g., *.png).
+Default output: <filename>_q<quality>[<resize>][_gray].<format> (never overwrites;
+a numbered suffix is added on conflict).
 
 Options:
-  -f, --format EXT  Output format (default: jpg)
-  -q, --quality N   Quality 1-100, applies to jpg/webp (default: 85)
-  -r, --resize N    Resize to N% of original dimensions (e.g., 50 for half size)
-  -g, --gray        Convert to grayscale"
+  -f, --format EXT   Output format (default: jpg)
+  -q, --quality N    Quality 1-100, applies to jpg/webp (default: 85)
+  -g, --gray         Convert to grayscale
+  -o, --output FILE  Explicit output path (single input only; its extension sets the format)
 
-    require_cmd convert
+Resize (choose at most one; percentage cannot be combined with exact size):
+  -r, --resize N     Scale to N% of original (e.g., 50 for half size)
+  -s, --size WxH     Resize to exact dimensions, ignoring aspect ratio (e.g., 800x600)
+  -w, --width N      Resize to width, maintain aspect ratio
+  -h, --height N     Resize to height, maintain aspect ratio"
+
+    # A percentage resize and an exact-pixel resize can't be combined.
+    if [[ -n "$resize" && ( -n "$size" || -n "$width" || -n "$height" ) ]]; then
+        die "Cannot combine percentage resize (-r) with exact size (-s/-w/-h)"
+    fi
+
+    # An explicit output path only makes sense for a single input.
+    if [[ -n "$output" && ${#inputs[@]} -gt 1 ]]; then
+        die "-o/--output is only supported with a single input file"
+    fi
+
+    require_cmd "$MAGICK"
+
+    # Build the resize filter and a matching filename marker (precedence s > w > h).
+    local resize_args=() resize_marker=""
+    if [[ -n "$resize" ]]; then
+        resize_args=(-resize "${resize}%"); resize_marker="_r${resize}"
+    elif [[ -n "$size" ]]; then
+        resize_args=(-resize "${size}!"); resize_marker="_${size}"
+    elif [[ -n "$width" ]]; then
+        resize_args=(-resize "${width}x"); resize_marker="_w${width}"
+    elif [[ -n "$height" ]]; then
+        resize_args=(-resize "x${height}"); resize_marker="_h${height}"
+    fi
+
+    local gray_args=() gray_marker=""
+    if [[ -n "$grayscale" ]]; then
+        gray_args=(-colorspace Gray); gray_marker="_gray"
+    fi
 
     local count=0
     local skipped=0
@@ -475,39 +353,25 @@ Options:
             continue
         fi
 
-        local basename="${input%.*}"
-        local output="${basename}_q${quality}"
-        if [[ -n "$resize" ]]; then
-            output="${output}_r${resize}"
+        local out
+        if [[ -n "$output" ]]; then
+            out="$output"
+        else
+            local basename="${input%.*}"
+            out="${basename}_q${quality}${resize_marker}${gray_marker}.${format}"
         fi
-        if [[ -n "$grayscale" ]]; then
-            output="${output}_gray"
-        fi
-        output="${output}.${format}"
+        out="$(unique_path "$out")"
 
-        if [[ -f "$output" ]]; then
-            warn "Skipping $input (output exists: $output)"
-            ((++skipped))
-            continue
-        fi
-
-        local resize_args=()
-        if [[ -n "$resize" ]]; then
-            resize_args=(-resize "${resize}%")
-        fi
-
-        local gray_args=()
-        if [[ -n "$grayscale" ]]; then
-            gray_args=(-colorspace Gray)
-        fi
-
-        img_convert "$input" "${resize_args[@]}" "${gray_args[@]}" -quality "$quality" "$output"
-        success "$input -> $output"
+        img_convert "$input" "${resize_args[@]+"${resize_args[@]}"}" "${gray_args[@]+"${gray_args[@]}"}" -quality "$quality" "$out"
+        success "$input -> $out"
         ((++count))
     done
 
     echo
     info "Converted: $count, Skipped: $skipped"
+    # Nothing produced (e.g. every input was missing) is a failure.
+    [[ $count -eq 0 ]] && exit 1
+    return 0
 }
 
 cmd_image() {
@@ -515,18 +379,12 @@ cmd_image() {
     shift || true
 
     case "$subcmd" in
-        resize)        cmd_image_resize "$@" ;;
-        convert)       cmd_image_convert "$@" ;;
-        optimize)      cmd_image_optimize "$@" ;;
-        batch_convert) cmd_image_batch_convert "$@" ;;
+        convert) cmd_image_convert "$@" ;;
         *)
             echo "Usage: lazy image <command>
 
 Commands:
-  resize         Resize an image
-  convert        Convert image format
-  optimize       Optimize image file size
-  batch_convert  Batch convert images to another format"
+  convert  Convert and/or resize one or more images"
             if [[ -n "$subcmd" ]]; then
                 die "Unknown command: image $subcmd"
             fi
@@ -540,12 +398,22 @@ Commands:
 
 cmd_video_convert() {
     local inputs=()
-    local quality="medium"
+    local mode="balanced"
+    local codec="h265"
+    local resolution="input"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -q|--quality)
-                quality="$2"
+            -m|--mode)
+                mode="$2"
+                shift 2
+                ;;
+            -c|--codec)
+                codec="$2"
+                shift 2
+                ;;
+            -r|--resolution)
+                resolution="$2"
                 shift 2
                 ;;
             -*)
@@ -558,17 +426,60 @@ cmd_video_convert() {
         esac
     done
 
-    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy video convert <input...> [-q quality]
+    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy video convert <input...> [-m mode] [-c codec] [-r resolution]
 
-Convert videos to MP4 (H.264) with max resolution 1280x720.
-Supports wildcards (e.g., *.mov)
-Output: <filename>.mp4
+Convert videos to MP4, preserving aspect ratio for both landscape and portrait.
+Supports wildcards (e.g., *.mov). Output: <filename>_<codec>[_<resolution>].mp4
+(never overwrites; a numbered suffix is added on conflict).
 
-Options:
-  -q, --quality PRESET  FFmpeg preset: ultrafast, fast, medium, slow (default: medium)
-                        Slower = better quality + smaller file, but longer encoding"
+Modes (-m, --mode):
+  balanced   preset slow    Good for ~90% of cases (default)
+  small      preset slow    More aggressive compression, smaller files
+  quality    preset slower  Higher picture quality, longer encoding
+
+The CRF (quality target) is tuned per codec, since H.265 needs a higher CRF than
+H.264 for equivalent quality. Lower CRF = higher quality + larger file.
+
+Codec (-c, --codec):    h265 (HEVC, smaller; default) or h264 (more compatible)
+Resolution (-r):        input (keep original; default), 4k, 1080p, or 720p
+                        (scales down only, never up; aspect ratio preserved)
+
+Audio: balanced/quality copy the original audio stream losslessly (falling back
+to AAC 192k if the source codec isn't MP4-compatible); small re-encodes to AAC 128k."
+
+    # Map codec to the ffmpeg video encoder args.
+    local video_args
+    case "$codec" in
+        h265) video_args=(-c:v libx265 -pix_fmt yuv420p -tag:v hvc1) ;;
+        h264) video_args=(-c:v libx264 -pix_fmt yuv420p) ;;
+        *) die "Unknown codec: $codec (expected: h265, h264)" ;;
+    esac
+
+    # Map mode to preset + CRF. x264 and x265 use different CRF scales (x265
+    # needs a higher CRF for the same quality, roughly +5), so each codec gets
+    # its own value tuned to the same visual target.
+    local crf preset
+    case "$mode" in
+        balanced) preset="slow";   [[ "$codec" == "h264" ]] && crf=23 || crf=28 ;;
+        small)    preset="slow";   [[ "$codec" == "h264" ]] && crf=27 || crf=32 ;;
+        quality)  preset="slower"; [[ "$codec" == "h264" ]] && crf=19 || crf=24 ;;
+        *) die "Unknown mode: $mode (expected: balanced, small, quality)" ;;
+    esac
+
+    # Map resolution preset to landscape max dimensions ("" = keep original).
+    local res_max_w res_max_h
+    case "$resolution" in
+        input) res_max_w=""; res_max_h="" ;;
+        4k)    res_max_w=3840; res_max_h=2160 ;;
+        1080p) res_max_w=1920; res_max_h=1080 ;;
+        720p)  res_max_w=1280; res_max_h=720 ;;
+        *) die "Unknown resolution: $resolution (expected: input, 4k, 1080p, 720p)" ;;
+    esac
 
     require_cmd ffmpeg
+
+    local res_suffix=""
+    [[ "$resolution" != "input" ]] && res_suffix="_${resolution}"
 
     local count=0
     local skipped=0
@@ -581,54 +492,69 @@ Options:
         fi
 
         local basename="${input%.*}"
-        local output="${basename}.mp4"
+        local output="${basename}_${codec}${res_suffix}.mp4"
+        output="$(unique_path "$output")"
 
-        # Skip if input is already the output
-        if [[ "$input" == "$output" ]]; then
-            output="${basename}_converted.mp4"
-        fi
+        # Decide how to handle audio.
+        #   small           -> always re-encode to AAC 128k (aggressive)
+        #   balanced/quality -> copy the original stream losslessly when it is a
+        #                       codec MP4/QuickTime can play, otherwise fall back
+        #                       to high-quality AAC so the output stays playable.
+        local audio_args=()
+        local source_audio
+        source_audio=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$input" 2>/dev/null)
 
-        if [[ -f "$output" ]]; then
-            warn "Skipping $input (output exists: $output)"
-            ((++skipped))
-            continue
-        fi
-
-        info "Converting $input -> $output"
-
-        # Get video dimensions to determine orientation
-        local dimensions
-        dimensions=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "$input" 2>/dev/null)
-        local width height
-        width=$(echo "$dimensions" | cut -d'x' -f1)
-        height=$(echo "$dimensions" | cut -d'x' -f2)
-
-        # Determine max dimensions based on orientation
-        local max_width max_height
-        if [[ "$width" -ge "$height" ]]; then
-            # Landscape or square
-            max_width=1280
-            max_height=720
+        if [[ -z "$source_audio" ]]; then
+            # No audio stream present.
+            audio_args=(-an)
+        elif [[ "$mode" == "small" ]]; then
+            audio_args=(-c:a aac -b:a 128k)
         else
-            # Portrait/vertical
-            max_width=720
-            max_height=1280
+            case "$source_audio" in
+                aac|ac3|eac3|mp3|alac)
+                    # MP4/QuickTime-compatible: keep the original stream as-is.
+                    audio_args=(-c:a copy)
+                    ;;
+                *)
+                    # e.g. opus, vorbis, dts, pcm_* — not reliably playable in MP4,
+                    # transcode to high-quality AAC instead.
+                    warn "Audio codec '$source_audio' isn't MP4/QuickTime-safe; re-encoding to AAC 192k"
+                    audio_args=(-c:a aac -b:a 192k)
+                    ;;
+            esac
         fi
 
-        # Build scale filter:
-        # - Scale down if larger than max dimensions
-        # - Maintain aspect ratio
-        # - Ensure dimensions are divisible by 2 (required for H.264)
-        local scale_filter="scale='min(${max_width},iw)':'min(${max_height},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        # Build the scale filter. Always force even dimensions (required for
+        # yuv420p / H.264 / H.265). When a resolution cap is requested, scale
+        # down within it while preserving aspect ratio, orienting the cap to the
+        # video (portrait clips get the dimensions swapped).
+        local scale_filter="scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        if [[ -n "$res_max_w" ]]; then
+            local dimensions width height
+            dimensions=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "$input" 2>/dev/null)
+            width=$(echo "$dimensions" | cut -d'x' -f1)
+            height=$(echo "$dimensions" | cut -d'x' -f2)
+
+            local max_w max_h
+            if [[ -n "$width" && -n "$height" && "$width" -lt "$height" ]]; then
+                # Portrait/vertical: swap the cap.
+                max_w="$res_max_h"; max_h="$res_max_w"
+            else
+                # Landscape or square (also the fallback if probing failed).
+                max_w="$res_max_w"; max_h="$res_max_h"
+            fi
+            scale_filter="scale='min(${max_w},iw)':'min(${max_h},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        fi
+
+        info "Converting $input -> $output (codec: $codec, mode: $mode, crf $crf, preset $preset, resolution: $resolution)"
 
         ffmpeg -i "$input" \
-            -c:v libx264 \
-            -preset "$quality" \
-            -crf 23 \
+            "${video_args[@]}" \
+            -preset "$preset" \
+            -crf "$crf" \
             -vf "$scale_filter" \
             -max_muxing_queue_size 9999 \
-            -c:a aac \
-            -b:a 128k \
+            "${audio_args[@]}" \
             -movflags +faststart \
             -y \
             "$output" \
@@ -648,6 +574,9 @@ Options:
 
     echo
     info "Converted: $count, Skipped: $skipped"
+    # Nothing produced (e.g. every input failed or was missing) is a failure.
+    [[ $count -eq 0 ]] && exit 1
+    return 0
 }
 
 cmd_video() {
@@ -660,7 +589,7 @@ cmd_video() {
             echo "Usage: lazy video <command>
 
 Commands:
-  convert    Convert videos to MP4 (H.264, max 720p)"
+  convert  Convert videos to MP4 (H.265/H.264, optional resolution cap)"
             if [[ -n "$subcmd" ]]; then
                 die "Unknown command: video $subcmd"
             fi
@@ -883,10 +812,10 @@ cmd_doctor() {
         error "ghostscript not installed"
     fi
 
-    # Check imagemagick
-    if command -v convert &> /dev/null; then
-        local im_version=$(convert --version 2>/dev/null | head -1 | awk '{print $3}' || echo "unknown")
-        success "imagemagick $im_version"
+    # Check imagemagick (magick on IM7, convert on IM6)
+    if command -v "$MAGICK" &> /dev/null; then
+        local im_version=$("$MAGICK" --version 2>/dev/null | head -1 | awk '{print $3}' || echo "unknown")
+        success "imagemagick $im_version ($MAGICK)"
     else
         error "imagemagick not installed"
     fi
@@ -927,7 +856,7 @@ Usage: lazy <command> [options]
 
 Commands:
   pdf       PDF operations (compress, merge)
-  image     Image operations (resize, convert, optimize, batch_convert)
+  image     Image operations (convert/resize)
   video     Video operations (convert to MP4)
   backup    Backup operations (home)
   doctor    Check system dependencies
@@ -935,11 +864,11 @@ Commands:
 Examples:
   lazy pdf compress document.pdf -q ebook
   lazy pdf merge file1.pdf file2.pdf -o merged.pdf
-  lazy image resize photo.jpg -w 800
-  lazy image convert photo.png -o photo.webp
-  lazy image optimize photo.jpg -q 80
-  lazy image batch_convert *.png -f webp -q 90
+  lazy image convert *.png -f webp -q 90
+  lazy image convert photo.jpg -w 800
+  lazy image convert logo.png -o logo.webp
   lazy video convert *.mov
+  lazy video convert *.mov -c h264 -r 1080p
   lazy backup home /mnt/external
 
 Run 'lazy <command>' for command-specific help.

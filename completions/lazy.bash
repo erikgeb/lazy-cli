@@ -7,7 +7,7 @@ _lazy_completions() {
 
     local commands="pdf image video backup doctor version help"
     local pdf_commands="compress merge"
-    local image_commands="resize convert optimize batch_convert"
+    local image_commands="convert"
     local video_commands="convert"
     local backup_commands="home"
 
@@ -73,65 +73,20 @@ _lazy_completions() {
                     ;;
                 image)
                     case "${subcmd}" in
-                        resize)
-                            case "${prev}" in
-                                -o|--output|-s|--size|-w|--width|-h|--height)
-                                    COMPREPLY=()
-                                    ;;
-                                *)
-                                    if [[ "${cur}" == -* ]]; then
-                                        COMPREPLY=($(compgen -W "-o --output -s --size -w --width -h --height" -- "${cur}"))
-                                    else
-                                        COMPREPLY=($(compgen -f -- "${cur}"))
-                                    fi
-                                    ;;
-                            esac
-                            ;;
                         convert)
-                            case "${prev}" in
-                                -o|--output)
-                                    COMPREPLY=($(compgen -f -- "${cur}"))
-                                    ;;
-                                -q|--quality)
-                                    COMPREPLY=()
-                                    ;;
-                                *)
-                                    if [[ "${cur}" == -* ]]; then
-                                        COMPREPLY=($(compgen -W "-o --output -q --quality -g --gray" -- "${cur}"))
-                                    else
-                                        COMPREPLY=($(compgen -f -- "${cur}"))
-                                    fi
-                                    ;;
-                            esac
-                            ;;
-                        optimize)
-                            case "${prev}" in
-                                -o|--output)
-                                    COMPREPLY=($(compgen -f -- "${cur}"))
-                                    ;;
-                                -q|--quality)
-                                    COMPREPLY=()
-                                    ;;
-                                *)
-                                    if [[ "${cur}" == -* ]]; then
-                                        COMPREPLY=($(compgen -W "-o --output -q --quality" -- "${cur}"))
-                                    else
-                                        COMPREPLY=($(compgen -f -- "${cur}"))
-                                    fi
-                                    ;;
-                            esac
-                            ;;
-                        batch_convert)
                             case "${prev}" in
                                 -f|--format)
                                     COMPREPLY=($(compgen -W "jpg jpeg png webp gif bmp tiff" -- "${cur}"))
                                     ;;
-                                -q|--quality|-r|--resize)
+                                -o|--output)
+                                    COMPREPLY=($(compgen -f -- "${cur}"))
+                                    ;;
+                                -q|--quality|-r|--resize|-s|--size|-w|--width|-h|--height)
                                     COMPREPLY=()
                                     ;;
                                 *)
                                     if [[ "${cur}" == -* ]]; then
-                                        COMPREPLY=($(compgen -W "-f --format -q --quality -r --resize -g --gray" -- "${cur}"))
+                                        COMPREPLY=($(compgen -W "-f --format -q --quality -r --resize -s --size -w --width -h --height -g --gray -o --output" -- "${cur}"))
                                     else
                                         COMPREPLY=($(compgen -f -- "${cur}"))
                                     fi
@@ -144,12 +99,18 @@ _lazy_completions() {
                     case "${subcmd}" in
                         convert)
                             case "${prev}" in
-                                -q|--quality)
-                                    COMPREPLY=($(compgen -W "ultrafast fast medium slow" -- "${cur}"))
+                                -m|--mode)
+                                    COMPREPLY=($(compgen -W "balanced small quality" -- "${cur}"))
+                                    ;;
+                                -c|--codec)
+                                    COMPREPLY=($(compgen -W "h265 h264" -- "${cur}"))
+                                    ;;
+                                -r|--resolution)
+                                    COMPREPLY=($(compgen -W "input 4k 1080p 720p" -- "${cur}"))
                                     ;;
                                 *)
                                     if [[ "${cur}" == -* ]]; then
-                                        COMPREPLY=($(compgen -W "-q --quality" -- "${cur}"))
+                                        COMPREPLY=($(compgen -W "-m --mode -c --codec -r --resolution" -- "${cur}"))
                                     else
                                         COMPREPLY=($(compgen -f -- "${cur}"))
                                     fi
