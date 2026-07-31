@@ -30,6 +30,8 @@ make install
 - `Makefile` - Handles dependency installation (detects OS and package manager) and CLI installation
 - `completions/lazy.bash` - Bash completion script
 - `completions/_lazy` - Zsh completion script
+- `gui/lazy-gui` - macOS Finder GUI dispatcher (osascript dialogs) that shells out to `lazy`
+- `gui/quick-actions/*.workflow` - Finder Quick Action bundles; each just runs `lazy-gui <category> "$@"`
 
 The CLI uses a command/subcommand pattern:
 - `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`): `compress`, `merge`
@@ -42,6 +44,22 @@ Image conversions go through the `img_convert` wrapper, which applies common par
 Every command writes output next to the input and never overwrites: `unique_path` returns a non-conflicting name using the macOS Finder convention (`foo.ext`, then `foo 2.ext`, ...). There is no overwrite prompt or skip-if-exists behavior.
 
 Configuration is stored in `~/.config/lazy/config` (e.g., last used backup volume).
+
+## macOS GUI (Finder Quick Actions)
+
+`gui/lazy-gui` is the only place with GUI logic: it asks a few questions via `osascript`,
+runs the matching `lazy` command, and relies on `lazy`'s **exit code** to decide success.
+It does not reveal anything — the output lands next to the input, so Finder shows it
+automatically. Success is silent; only failures pop a dialog. The one exception is video
+(a long job), which shows a start and a completion notification. Because success/failure
+rides on the exit code, `image convert` and `video convert` exit non-zero when they produce
+nothing (e.g. every input was missing).
+
+`gui/lazy-gui` is written for bash 3.2 (the interpreter Automator services use) — avoid
+associative arrays, `mapfile`, and `set -u`. The three `.workflow` bundles are thin and
+static; to expose a new operation in the GUI, edit `gui/lazy-gui`, not the bundles.
+`make install-gui` / `uninstall-gui` manage installation. GUI flows are tested in
+`tests/gui.bats` by sourcing the dispatcher and stubbing the `ui_*` helpers.
 
 ## Adding New Commands
 

@@ -76,6 +76,32 @@ Commands write output next to the input and **never overwrite**. If the target n
 already exists, a numbered suffix is added following the macOS Finder convention
 (`photo_q85.jpg`, then `photo_q85 2.jpg`, `photo_q85 3.jpg`, ...). No overwrite prompt.
 
+## GUI for Finder (macOS)
+
+For people who'd rather not use the terminal, lazy ships three **Finder Quick Actions** —
+`Lazy Image`, `Lazy PDF`, and `Lazy Video`. Install them with:
+
+```bash
+make install-gui      # installs lazy + lazy-gui and the Quick Actions
+make uninstall-gui    # removes them again
+```
+
+Then, in Finder, right-click a file (or several) and choose **Quick Actions → Lazy Image /
+Lazy PDF / Lazy Video**. A couple of simple dialogs ask for the format/quality/size (or
+compression settings for video), and the new file appears right next to the original — no
+confirmation pop-up on success (video shows a start/finish notification since it takes a
+while). If something goes wrong, a dialog explains what. Each action only appears for the
+matching file type. If they don't show up at first, enable them under **System Settings →
+Extensions → Finder**, or log out and back in.
+
+Under the hood the Quick Actions just call `gui/lazy-gui`, a small dispatcher that runs the
+same `lazy` commands documented above — so there's no separate conversion logic to maintain.
+Adding a new option to the GUI means editing `gui/lazy-gui`, not the workflow bundles.
+
+> If a Quick Action ever fails to load after a macOS update, open the matching
+> `gui/quick-actions/*.workflow` in Automator once and re-save it; the shell action inside
+> is a single line (`lazy-gui <category> "$@"`).
+
 ## Shell Completions
 
 Shell completions are installed automatically with `make install`. To activate:

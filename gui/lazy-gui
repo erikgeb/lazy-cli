@@ -1,0 +1,272 @@
+#!/usr/bin/env bash
+#
+# lazy-gui - Finder Quick Action front-end for the `lazy` CLI.
+#
+# Invoked as:  lazy-gui <image|pdf|video> <file>...
+# Each Finder Quick Action (see gui/quick-actions/) is a thin wrapper that just
+# calls this with a category and the selected files. All the interaction logic
+# lives here: it asks a couple of native questions with osascript, runs the
+# matching `lazy` command, reveals the new output in Finder, and shows a plain
+# dialog if anything goes wrong.
+#
+# Written for bash 3.2 (the /bin/bash that Automator services run under), so it
+# avoids associative arrays, mapfile, and `set -u`.
+
+# Quick Actions run with a minimal PATH that omits Homebrew, so `lazy` and its
+# tools (gs, magick, ffmpeg) wouldn't be found. Put the usual locations first.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+# ---------------------------------------------------------------------------
+# Locate the lazy binary
+# ---------------------------------------------------------------------------
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+find_lazy() {
+    if [[ -n "${LAZY_BIN:-}" && -x "$LAZY_BIN" ]]; then
+        printf '%s' "$LAZY_BIN"; return 0
+    fi
+    local candidate
+    for candidate in "/usr/local/bin/lazy" "/opt/homebrew/bin/lazy" "$SELF_DIR/../lazy"; do
+        if [[ -x "$candidate" ]]; then printf '%s' "$candidate"; return 0; fi
+    done
+    if command -v lazy >/dev/null 2>&1; then command -v lazy; return 0; fi
+    return 1
+}
+
+LAZY_BIN="$(find_lazy)" || true
+
+# ---------------------------------------------------------------------------
+# UI helpers (osascript). Controlled labels use escaped heredocs; free text
+# (error/notification bodies) is passed via argv so newlines/quotes are safe.
+# ---------------------------------------------------------------------------
+
+# Escape a string for inclusion inside an AppleScript "..." literal.
+esc() {
+    local s="$1"
+    s=${s//\\/\\\\}
+    s=${s//\"/\\\"}
+    printf '%s' "$s"
+}
+
+# ui_choose <prompt> <title> <option>...  -> prints the chosen option, or empty
+# if the user cancelled.
+ui_choose() {
+    local prompt="$1" title="$2"; shift 2
+    local list="" item
+    for item in "$@"; do
+        [[ -n "$list" ]] && list="$list, "
+        list="$list\"$(esc "$item")\""
+    done
+    osascript 2>/dev/null <<EOF
+set theChoice to choose from list {$list} with title "$(esc "$title")" with prompt "$(esc "$prompt")"
+if theChoice is false then
+    return ""
+else
+    return (item 1 of theChoice) as text
+end if
+EOF
+}
+
+# ui_prompt <prompt> <default> <title>  -> prints the entered text; non-zero
+# exit (and empty output) if the user cancelled.
+ui_prompt() {
+    local prompt="$1" default="$2" title="$3"
+    osascript 2>/dev/null <<EOF
+set r to display dialog "$(esc "$prompt")" default answer "$(esc "$default")" with title "$(esc "$title")" buttons {"Cancel", "OK"} default button "OK"
+return text returned of r
+EOF
+}
+
+ui_notify() {
+    osascript - "$1" >/dev/null 2>&1 <<'APPLESCRIPT' || true
+on run argv
+    display notification (item 1 of argv) with title "lazy"
+end run
+APPLESCRIPT
+}
+
+ui_error() {
+    osascript - "$1" >/dev/null 2>&1 <<'APPLESCRIPT' || true
+on run argv
+    display dialog (item 1 of argv) with title "Lazy" buttons {"OK"} default button "OK" with icon caution
+end run
+APPLESCRIPT
+}
+
+strip_ansi() { sed $'s/\x1b\\[[0-9;]*m//g'; }
+
+# ---------------------------------------------------------------------------
+# Running lazy and revealing results
+# ---------------------------------------------------------------------------
+LAZY_LOG=""
+
+run_lazy() {
+    local out status
+    out="$("$LAZY_BIN" "$@" 2>&1)"; status=$?
+    LAZY_LOG="${LAZY_LOG}${out}"$'\n'
+    return $status
+}
+
+# report_error_if_failed <exit-status>
+# On success, do nothing: the new file already appears in Finder next to the
+# input, so there's no dialog to show. On failure, surface lazy's output.
+report_error_if_failed() {
+    [[ "$1" -eq 0 ]] && return 0
+    local body
+    body="$(printf '%s' "$LAZY_LOG" | strip_ansi | tail -c 1200)"
+    ui_error "lazy couldn't finish this one:"$'\n\n'"$body"
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Per-category flows
+# ---------------------------------------------------------------------------
+
+do_image() {
+    local files=("$@")
+    local fmt_label fmt
+    fmt_label="$(ui_choose "Convert image(s) to which format?" "Lazy — Images" "JPEG" "PNG" "WebP")"
+    [[ -z "$fmt_label" ]] && exit 0
+    case "$fmt_label" in
+        JPEG) fmt="jpg" ;;
+        PNG)  fmt="png" ;;
+        WebP) fmt="webp" ;;
+    esac
+
+    local args=(image convert "${files[@]}" -f "$fmt")
+
+    # Quality only matters for lossy formats.
+    if [[ "$fmt" != "png" ]]; then
+        local q_label
+        q_label="$(ui_choose "Quality?" "Lazy — Images" "High (best looking)" "Medium (smaller file)" "Low (smallest file)")"
+        [[ -z "$q_label" ]] && exit 0
+        case "$q_label" in
+            High*)   args+=(-q 90) ;;
+            Medium*) args+=(-q 80) ;;
+            Low*)    args+=(-q 60) ;;
+        esac
+    fi
+
+    local size_label
+    size_label="$(ui_choose "Resize?" "Lazy — Images" "Keep original size" "75%" "50%" "25%")"
+    [[ -z "$size_label" ]] && exit 0
+    case "$size_label" in
+        75%) args+=(-r 75) ;;
+        50%) args+=(-r 50) ;;
+        25%) args+=(-r 25) ;;
+    esac
+
+    local color_label
+    color_label="$(ui_choose "Color?" "Lazy — Images" "Keep colors" "Grayscale")"
+    [[ -z "$color_label" ]] && exit 0
+    [[ "$color_label" == "Grayscale" ]] && args+=(-g)
+
+    local fail=0
+    LAZY_LOG=""
+    run_lazy "${args[@]}" || fail=1
+    report_error_if_failed "$fail"
+}
+
+do_pdf() {
+    local files=("$@")
+    local n=${#files[@]}
+    local op="Compress each"
+
+    if [[ "$n" -ge 2 ]]; then
+        op="$(ui_choose "You selected $n PDFs. What do you want to do?" "Lazy — PDF" "Compress each" "Merge into one PDF")"
+        [[ -z "$op" ]] && exit 0
+    fi
+
+    local fail=0
+    LAZY_LOG=""
+
+    if [[ "$op" == "Merge into one PDF" ]]; then
+        local name dir
+        name="$(ui_prompt "Name for the merged PDF:" "merged" "Lazy — PDF")" || exit 0
+        [[ -z "$name" ]] && exit 0
+        name="${name%.pdf}"
+        dir="$(dirname "${files[0]}")"
+        run_lazy pdf merge "${files[@]}" -o "$dir/$name.pdf" || fail=1
+    else
+        local q_label q f
+        q_label="$(ui_choose "Compression level?" "Lazy — PDF" "Recommended" "Smaller file" "High quality (print)" "Best quality")"
+        [[ -z "$q_label" ]] && exit 0
+        case "$q_label" in
+            "Recommended")        q="ebook" ;;
+            "Smaller file")       q="screen" ;;
+            "High quality (print)") q="printer" ;;
+            "Best quality")       q="prepress" ;;
+        esac
+        for f in "${files[@]}"; do
+            run_lazy pdf compress "$f" -q "$q" || fail=1
+        done
+    fi
+
+    report_error_if_failed "$fail"
+}
+
+do_video() {
+    local files=("$@")
+    local mode_label mode res_label res
+
+    mode_label="$(ui_choose "Compression:" "Lazy — Video" "Balanced" "Smaller file" "Higher quality")"
+    [[ -z "$mode_label" ]] && exit 0
+    case "$mode_label" in
+        "Balanced")       mode="balanced" ;;
+        "Smaller file")   mode="small" ;;
+        "Higher quality") mode="quality" ;;
+    esac
+
+    res_label="$(ui_choose "Resolution:" "Lazy — Video" "Same as original" "4K" "1080p" "720p")"
+    [[ -z "$res_label" ]] && exit 0
+    case "$res_label" in
+        "Same as original") res="input" ;;
+        "4K")               res="4k" ;;
+        "1080p")            res="1080p" ;;
+        "720p")             res="720p" ;;
+    esac
+
+    ui_notify "Converting video… this can take a while."
+
+    local fail=0
+    LAZY_LOG=""
+    run_lazy video convert "${files[@]}" -m "$mode" -r "$res" || fail=1
+    report_error_if_failed "$fail"
+    # Long job: confirm completion (image/pdf stay silent — the file is already
+    # visible in Finder next to the original).
+    ui_notify "Video conversion finished."
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+main() {
+    local category="${1:-}"
+    shift || true
+
+    if [[ -z "$LAZY_BIN" ]]; then
+        ui_error "Couldn't find the 'lazy' command. Install it with 'make install' from the lazy-cli folder."
+        exit 1
+    fi
+
+    if [[ $# -eq 0 ]]; then
+        ui_error "No files were selected."
+        exit 1
+    fi
+
+    case "$category" in
+        image) do_image "$@" ;;
+        pdf)   do_pdf "$@" ;;
+        video) do_video "$@" ;;
+        *)
+            echo "Usage: lazy-gui <image|pdf|video> <file>..." >&2
+            exit 1
+            ;;
+    esac
+}
+
+# Only auto-run when executed directly; sourcing (e.g. from tests) just loads
+# the functions so they can be driven with stubbed UI helpers.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
