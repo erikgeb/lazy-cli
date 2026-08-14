@@ -237,6 +237,44 @@ get_audio_codec() {
 }
 
 # =============================================================================
+# video convert - timestamp and metadata preservation
+# =============================================================================
+
+@test "video convert preserves file system modification date" {
+    cp "${TEST_TMP}/test_video.mp4" "${TEST_TMP}/mtime_test.mp4"
+    touch -t 202001011200.00 "${TEST_TMP}/mtime_test.mp4"
+
+    local input_mtime
+    input_mtime=$(stat -f%m "${TEST_TMP}/mtime_test.mp4" 2>/dev/null || stat -c%Y "${TEST_TMP}/mtime_test.mp4")
+
+    run_lazy video convert "${TEST_TMP}/mtime_test.mp4" -m small
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/mtime_test_h265.mp4"
+
+    local output_mtime
+    output_mtime=$(stat -f%m "${TEST_TMP}/mtime_test_h265.mp4" 2>/dev/null || stat -c%Y "${TEST_TMP}/mtime_test_h265.mp4")
+
+    [ "$input_mtime" -eq "$output_mtime" ]
+}
+
+@test "video convert preserves metadata creation_time" {
+    ffmpeg -f lavfi -i testsrc=duration=1:size=320x240:rate=10 \
+        -c:v libx264 -pix_fmt yuv420p \
+        -metadata creation_time="2020-01-01T12:00:00.000000Z" \
+        -movflags +faststart+use_metadata_tags \
+        -metadata "com.apple.quicktime.creationdate"="2020-01-01T12:00:00+0000" \
+        "${TEST_TMP}/meta_test.mp4" -y 2>/dev/null
+
+    run_lazy video convert "${TEST_TMP}/meta_test.mp4" -m small
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/meta_test_h265.mp4"
+
+    local tags
+    tags=$(ffprobe -v quiet -show_entries format_tags -of json "${TEST_TMP}/meta_test_h265.mp4")
+    echo "$tags" | grep -q "2020-01-01T12:00:00"
+}
+
+# =============================================================================
 # video - removed/unknown subcommands
 # =============================================================================
 

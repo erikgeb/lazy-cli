@@ -555,12 +555,14 @@ to AAC 192k if the source codec isn't MP4-compatible); small re-encodes to AAC 1
             -vf "$scale_filter" \
             -max_muxing_queue_size 9999 \
             "${audio_args[@]}" \
-            -movflags +faststart \
+            -map_metadata 0 \
+            -movflags +faststart+use_metadata_tags \
             -y \
             "$output" \
             2>/dev/null
 
         if [[ $? -eq 0 ]]; then
+            touch -r "$input" "$output"
             local input_size output_size
             input_size=$(stat -f%z "$input" 2>/dev/null || stat -c%s "$input")
             output_size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output")
