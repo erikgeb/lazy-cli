@@ -33,7 +33,7 @@ endif
 
 install-deps-macos:
 	@echo "Installing dependencies on macOS..."
-	@if ! command -v brew &> /dev/null; then \
+	@if ! command -v brew > /dev/null 2>&1; then \
 		echo "Error: Homebrew is required. Install from https://brew.sh"; \
 		exit 1; \
 	fi
@@ -41,15 +41,15 @@ install-deps-macos:
 
 install-deps-linux:
 	@echo "Installing dependencies on Linux..."
-	@if command -v apt-get &> /dev/null; then \
+	@if command -v apt-get > /dev/null 2>&1; then \
 		sudo apt-get update && sudo apt-get install -y ghostscript imagemagick rsync ffmpeg; \
-	elif command -v dnf &> /dev/null; then \
+	elif command -v dnf > /dev/null 2>&1; then \
 		sudo dnf install -y ghostscript ImageMagick rsync ffmpeg; \
-	elif command -v yum &> /dev/null; then \
+	elif command -v yum > /dev/null 2>&1; then \
 		sudo yum install -y ghostscript ImageMagick rsync ffmpeg; \
-	elif command -v pacman &> /dev/null; then \
+	elif command -v pacman > /dev/null 2>&1; then \
 		sudo pacman -S --noconfirm ghostscript imagemagick rsync ffmpeg; \
-	elif command -v zypper &> /dev/null; then \
+	elif command -v zypper > /dev/null 2>&1; then \
 		sudo zypper install -y ghostscript ImageMagick rsync ffmpeg; \
 	else \
 		echo "Error: No supported package manager found (apt, dnf, yum, pacman, zypper)"; \
@@ -133,11 +133,11 @@ install-test-deps:
 ifeq ($(UNAME_S),Darwin)
 	brew install bats-core
 else ifeq ($(UNAME_S),Linux)
-	@if command -v apt-get &> /dev/null; then \
+	@if command -v apt-get > /dev/null 2>&1; then \
 		sudo apt-get update && sudo apt-get install -y bats; \
-	elif command -v dnf &> /dev/null; then \
+	elif command -v dnf > /dev/null 2>&1; then \
 		sudo dnf install -y bats; \
-	elif command -v pacman &> /dev/null; then \
+	elif command -v pacman > /dev/null 2>&1; then \
 		sudo pacman -S --noconfirm bash-bats; \
 	else \
 		echo "Installing bats-core from git..."; \
@@ -149,7 +149,7 @@ endif
 	@echo "bats-core installed."
 
 test:
-	@if ! command -v bats &> /dev/null; then \
+	@if ! command -v bats > /dev/null 2>&1; then \
 		echo "Error: bats-core not installed. Run 'make install-test-deps' first."; \
 		exit 1; \
 	fi
@@ -157,7 +157,7 @@ test:
 	bats tests/
 
 test-unit:
-	@if ! command -v bats &> /dev/null; then \
+	@if ! command -v bats > /dev/null 2>&1; then \
 		echo "Error: bats-core not installed. Run 'make install-test-deps' first."; \
 		exit 1; \
 	fi
