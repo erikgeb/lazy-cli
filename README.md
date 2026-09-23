@@ -2,6 +2,8 @@
 
 A CLI tool for common file operations using ghostscript, imagemagick, ffmpeg, and rsync.
 
+[![Tests](https://github.com/erikgeb/lazy-cli/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/erikgeb/lazy-cli/actions/workflows/test.yml)
+
 ## Installation
 
 ```bash
