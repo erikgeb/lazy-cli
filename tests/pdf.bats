@@ -130,3 +130,27 @@ setup() {
     assert_output_contains "Unknown command: pdf unknownsub"
     [ "$status" -eq 1 ]
 }
+
+# =============================================================================
+# pdf orientation preservation
+# =============================================================================
+
+@test "pdf compress preserves page orientation (no auto-rotation)" {
+    if ! command -v pdfinfo &> /dev/null; then
+        skip "pdfinfo not installed"
+    fi
+    run_lazy pdf compress "${TEST_TMP}/test_vtext.pdf" -o "${TEST_TMP}/compressed_vtext.pdf"
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/compressed_vtext.pdf"
+    [ "$(get_pdf_page_rotation "${TEST_TMP}/compressed_vtext.pdf")" = "0" ]
+}
+
+@test "pdf merge preserves page orientation (no auto-rotation)" {
+    if ! command -v pdfinfo &> /dev/null; then
+        skip "pdfinfo not installed"
+    fi
+    run_lazy pdf merge "${TEST_TMP}/test_vtext.pdf" "${TEST_TMP}/test_vtext2.pdf" -o "${TEST_TMP}/merged_vtext.pdf"
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/merged_vtext.pdf"
+    [ "$(get_pdf_page_rotation "${TEST_TMP}/merged_vtext.pdf")" = "0" ]
+}

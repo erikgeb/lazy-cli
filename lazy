@@ -71,13 +71,13 @@ fi
 
 # Imagemagick wrapper with common parameters
 # Usage: img_convert <input> [options...] <output>
-# Applies: -strip (remove metadata), -interlace Plane (progressive loading)
+# Applies: -auto-orient (preserve rotation metadata), -strip (remove metadata), -interlace Plane (progressive loading)
 # The common options go *after* the input: under ImageMagick 7 `-strip` is an
 # image operator and errors if it appears before any image is loaded.
 img_convert() {
     local input="$1"
     shift
-    "$MAGICK" "$input" -strip -interlace Plane "$@"
+    "$MAGICK" "$input" -auto-orient -strip -interlace Plane "$@"
 }
 
 # Config file management
@@ -166,6 +166,7 @@ Quality options:
     gs -sDEVICE=pdfwrite \
        -dCompatibilityLevel=1.4 \
        -dPDFSETTINGS="/$quality" \
+       -dAutoRotatePages=/None \
        -dNOPAUSE \
        -dQUIET \
        -dBATCH \
@@ -211,6 +212,7 @@ cmd_pdf_merge() {
        -dNOPAUSE \
        -dQUIET \
        -sDEVICE=pdfwrite \
+       -dAutoRotatePages=/None \
        -sOutputFile="$output" \
        "${inputs[@]}"
 

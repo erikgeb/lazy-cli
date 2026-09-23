@@ -33,9 +33,13 @@ create_test_fixtures() {
         convert -size 100x100 xc:blue "${TEST_TMP}/test_image2.png"
         convert -size 200x100 xc:green "${TEST_TMP}/test_landscape.png"
         convert -size 100x200 xc:yellow "${TEST_TMP}/test_portrait.png"
+
+        # Create EXIF rotated test images
+        create_exif_test_image "${TEST_TMP}/test_exif_rot180.jpg" 3
+        create_exif_test_image "${TEST_TMP}/test_exif_rot90.jpg" 6
     fi
 
-    # Create a simple test PDF
+    # Create simple test PDFs
     if command -v gs &> /dev/null; then
         # Create a minimal PDF using echo and gs
         cat > "${TEST_TMP}/test.pdf" << 'EOFPDF'
@@ -56,6 +60,31 @@ startxref
 EOFPDF
         # Create a second PDF for merge tests
         cp "${TEST_TMP}/test.pdf" "${TEST_TMP}/test2.pdf"
+
+        # Create a PDF with vertical text (susceptible to GS auto-rotation)
+        cat > "${TEST_TMP}/test_vtext.pdf" << 'EOFPDF'
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length 59 >> stream
+BT /F1 24 Tf 0 1 -1 0 100 100 Tm (Hello Vertical World) Tj ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000261 00000 n
+0000000330 00000 n
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+440
+%%EOF
+EOFPDF
+        cp "${TEST_TMP}/test_vtext.pdf" "${TEST_TMP}/test_vtext2.pdf"
     fi
 
     # Create a simple test video
@@ -64,6 +93,39 @@ EOFPDF
             -c:v libx264 -pix_fmt yuv420p \
             "${TEST_TMP}/test_video.mp4" -y 2>/dev/null
     fi
+}
+
+# Helper: Create JPEG with EXIF orientation metadata
+create_exif_test_image() {
+    local target="$1"
+    local orientation="${2:-3}" # default 3 (180 deg / BottomRight)
+    if command -v python3 &> /dev/null; then
+        python3 -c "
+from PIL import Image, ImageDraw
+img = Image.new('RGB', (100, 200), color='red')
+draw = ImageDraw.Draw(img)
+draw.rectangle([0, 100, 100, 200], fill='blue')
+exif = img.getexif()
+exif[274] = $orientation
+img.save('$target', exif=exif)
+" 2>/dev/null
+    fi
+}
+
+# Helper: Get PDF page rotation using pdfinfo
+get_pdf_page_rotation() {
+    local file="$1"
+    if command -v pdfinfo &> /dev/null; then
+        pdfinfo "$file" 2>/dev/null | awk '/Page rot:/ {print $3}'
+    fi
+}
+
+# Helper: Get pixel color at x,y
+get_pixel_color() {
+    local file="$1"
+    local x="$2"
+    local y="$3"
+    identify -format "%[pixel:p{$x,$y}]" "$file" 2>/dev/null
 }
 
 # Helper: Run lazy command and capture output

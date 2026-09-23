@@ -168,3 +168,31 @@ setup() {
     assert_output_contains "Unknown command: image batch_convert"
     [ "$status" -eq 1 ]
 }
+
+# =============================================================================
+# image convert - EXIF orientation / rotation preservation
+# =============================================================================
+
+@test "image convert preserves EXIF orientation rotation (180 deg)" {
+    if [[ ! -f "${TEST_TMP}/test_exif_rot180.jpg" ]]; then
+        skip "python3 PIL not available to create EXIF image fixture"
+    fi
+    run_lazy image convert "${TEST_TMP}/test_exif_rot180.jpg"
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/test_exif_rot180_q85.jpg"
+    # Visual top pixel must be blue (0,0,254) because 180 deg rotation was applied by auto-orient
+    local top_pixel
+    top_pixel="$(get_pixel_color "${TEST_TMP}/test_exif_rot180_q85.jpg" 50 10)"
+    [[ "$top_pixel" == *blue* || "$top_pixel" == srgb\(0,* ]]
+}
+
+@test "image convert auto-orients EXIF rotated dimensions (90 deg)" {
+    if [[ ! -f "${TEST_TMP}/test_exif_rot90.jpg" ]]; then
+        skip "python3 PIL not available to create EXIF image fixture"
+    fi
+    run_lazy image convert "${TEST_TMP}/test_exif_rot90.jpg"
+    [ "$status" -eq 0 ]
+    assert_file_exists "${TEST_TMP}/test_exif_rot90_q85.jpg"
+    # Original canvas 100x200 with EXIF orientation 6 (90 deg CW) becomes 200x100
+    [ "$(get_image_dimensions "${TEST_TMP}/test_exif_rot90_q85.jpg")" = "200x100" ]
+}
