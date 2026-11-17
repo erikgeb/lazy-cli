@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# lazy - A CLI tool for common file operations using ghostscript and imagemagick
+# lazy - A CLI tool for common file operations using ghostscript, imagemagick, and qpdf
 #
 
 set -euo pipefail
@@ -112,7 +112,7 @@ config_set() {
 }
 
 # ============================================================================
-# PDF Commands (using ghostscript)
+# PDF Commands (using ghostscript and qpdf)
 # ============================================================================
 
 cmd_pdf_compress() {
@@ -219,6 +219,117 @@ cmd_pdf_merge() {
     success "Created $output"
 }
 
+cmd_pdf_rotate() {
+    local degrees="90"
+    local pages=""
+    local output=""
+    local inputs=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--degrees)
+                degrees="$2"
+                shift 2
+                ;;
+            -p|--pages)
+                pages="$2"
+                shift 2
+                ;;
+            -o|--output)
+                output="$2"
+                shift 2
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                inputs+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    [[ ${#inputs[@]} -eq 0 ]] && die "Usage: lazy pdf rotate <input.pdf...> [-o output.pdf] [-d degrees] [-p pages]
+
+Rotate one or more PDF files clockwise (metadata only).
+Default rotation: 90 degrees clockwise.
+Default output: <filename>_rotated.pdf (never overwrites;
+a numbered suffix is added on conflict).
+
+Options:
+  -d, --degrees N    Rotation in degrees clockwise: 90, 180, 270 (default: 90)
+  -p, --pages RANGE  Page range to rotate (e.g., 1, 1-3, 2-z, even, odd; default: all)
+  -o, --output FILE  Explicit output path (single input only)"
+
+    # Strip leading + if provided (e.g. +90 -> 90)
+    degrees="${degrees#+}"
+    case "$degrees" in
+        90|180|270) ;;
+        *) die "Invalid degrees: $degrees (must be 90, 180, or 270)" ;;
+    esac
+
+    if [[ -n "$output" && ${#inputs[@]} -gt 1 ]]; then
+        die "-o/--output is only supported with a single input file"
+    fi
+
+    require_cmd qpdf
+
+    if [[ ${#inputs[@]} -eq 1 && ! -f "${inputs[0]}" ]]; then
+        die "File not found: ${inputs[0]}"
+    fi
+
+    local rotate_spec="+${degrees}"
+    if [[ -n "$pages" ]]; then
+        rotate_spec="+${degrees}:${pages}"
+    fi
+
+    local count=0
+    local skipped=0
+
+    for input in "${inputs[@]}"; do
+        if [[ ! -f "$input" ]]; then
+            warn "File not found: $input"
+            ((++skipped))
+            continue
+        fi
+
+        local out
+        if [[ -n "$output" ]]; then
+            out="$output"
+        else
+            local basename ext
+            if [[ "$input" == *.* ]]; then
+                basename="${input%.*}"
+                ext=".${input##*.}"
+            else
+                basename="$input"
+                ext=".pdf"
+            fi
+            out="${basename}_rotated${ext}"
+        fi
+        out="$(unique_path "$out")"
+
+        info "Rotating $input -> $out (${degrees}° clockwise)"
+
+        if qpdf --warning-exit-0 --no-warn "$input" --rotate="$rotate_spec" "$out"; then
+            success "Rotated $input -> $out"
+            ((++count))
+        else
+            error "Failed to rotate $input"
+            [[ -f "$out" ]] && rm -f "$out"
+            ((++skipped))
+        fi
+    done
+
+    if [[ ${#inputs[@]} -gt 1 ]]; then
+        echo
+        info "Rotated: $count, Skipped: $skipped"
+    fi
+
+    [[ $count -eq 0 ]] && return 1
+    return 0
+}
+
 cmd_pdf() {
     local subcmd="${1:-}"
     shift || true
@@ -226,12 +337,14 @@ cmd_pdf() {
     case "$subcmd" in
         compress) cmd_pdf_compress "$@" ;;
         merge)    cmd_pdf_merge "$@" ;;
+        rotate)   cmd_pdf_rotate "$@" ;;
         *)
             echo "Usage: lazy pdf <command>
 
 Commands:
   compress   Compress a PDF file
-  merge      Merge multiple PDF files"
+  merge      Merge multiple PDF files
+  rotate     Rotate PDF pages clockwise"
             if [[ -n "$subcmd" ]]; then
                 die "Unknown command: pdf $subcmd"
             fi
@@ -855,6 +968,16 @@ cmd_doctor() {
         error "ffmpeg not installed"
     fi
 
+    # Check qpdf
+    if command -v qpdf &> /dev/null; then
+        local qpdf_version
+        qpdf_version=$(qpdf --version 2>/dev/null | head -1 | awk '{print $3}')
+        [[ -z "$qpdf_version" ]] && qpdf_version="unknown"
+        success "qpdf $qpdf_version"
+    else
+        error "qpdf not installed"
+    fi
+
     echo
     echo "Run 'make install-deps' to install missing dependencies."
 }
@@ -870,7 +993,7 @@ lazy v$VERSION - A CLI for common file operations
 Usage: lazy <command> [options]
 
 Commands:
-  pdf       PDF operations (compress, merge)
+  pdf       PDF operations (compress, merge, rotate)
   image     Image operations (convert/resize)
   video     Video operations (convert to MP4)
   backup    Backup operations (home)
@@ -879,6 +1002,7 @@ Commands:
 Examples:
   lazy pdf compress document.pdf -q ebook
   lazy pdf merge file1.pdf file2.pdf -o merged.pdf
+  lazy pdf rotate document.pdf
   lazy image convert *.png -f webp -q 90
   lazy image convert photo.jpg -w 800
   lazy image convert logo.png -o logo.webp

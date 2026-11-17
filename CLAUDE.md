@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-lazy is a bash CLI tool that wraps ghostscript, imagemagick, ffmpeg, and rsync to provide simple commands for PDF, image, video, and backup operations on macOS and Linux.
+lazy is a bash CLI tool that wraps ghostscript, imagemagick, ffmpeg, rsync, and qpdf to provide simple commands for PDF, image, video, and backup operations on macOS and Linux.
 
 ## Commands
 
@@ -18,6 +18,7 @@ make install
 # Run directly without installing
 ./lazy doctor
 ./lazy pdf compress test.pdf
+./lazy pdf rotate test.pdf
 ./lazy image convert test.jpg -w 800
 ./lazy image convert *.png -f webp -g
 ./lazy video convert *.mov -c h264 -r 1080p
@@ -34,7 +35,7 @@ make install
 - `gui/quick-actions/*.workflow` - Finder Quick Action bundles; each just runs `lazy-gui <category> "$@"`
 
 The CLI uses a command/subcommand pattern:
-- `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`): `compress`, `merge`
+- `lazy pdf <subcommand>` - PDF operations via ghostscript (`gs`) and qpdf: `compress`, `merge`, `rotate`
 - `lazy image convert` - Image operations via imagemagick: format, quality, grayscale, and resizing (percentage `-r` or exact pixels `-s`/`-w`/`-h`) in one command
 - `lazy video convert` - Video operations via ffmpeg: H.265 (default) or H.264 (`-c`), quality mode (`-m`), and optional resolution cap (`-r`)
 - `lazy backup <subcommand>` - Backup operations via rsync: `home`
@@ -98,3 +99,4 @@ Test files:
 - imagemagick: provides `convert` command for image manipulation
 - ffmpeg: provides video conversion and encoding
 - rsync: provides backup functionality with incremental sync
+- qpdf: provides lossless metadata-based PDF rotation

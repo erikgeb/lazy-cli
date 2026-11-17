@@ -37,20 +37,20 @@ install-deps-macos:
 		echo "Error: Homebrew is required. Install from https://brew.sh"; \
 		exit 1; \
 	fi
-	brew install ghostscript imagemagick rsync ffmpeg
+	brew install ghostscript imagemagick rsync ffmpeg qpdf
 
 install-deps-linux:
 	@echo "Installing dependencies on Linux..."
 	@if command -v apt-get > /dev/null 2>&1; then \
-		sudo apt-get update && sudo apt-get install -y ghostscript imagemagick rsync ffmpeg; \
+		sudo apt-get update && sudo apt-get install -y ghostscript imagemagick rsync ffmpeg qpdf; \
 	elif command -v dnf > /dev/null 2>&1; then \
-		sudo dnf install -y ghostscript ImageMagick rsync ffmpeg; \
+		sudo dnf install -y ghostscript ImageMagick rsync ffmpeg qpdf; \
 	elif command -v yum > /dev/null 2>&1; then \
-		sudo yum install -y ghostscript ImageMagick rsync ffmpeg; \
+		sudo yum install -y ghostscript ImageMagick rsync ffmpeg qpdf; \
 	elif command -v pacman > /dev/null 2>&1; then \
-		sudo pacman -S --noconfirm ghostscript imagemagick rsync ffmpeg; \
+		sudo pacman -S --noconfirm ghostscript imagemagick rsync ffmpeg qpdf; \
 	elif command -v zypper > /dev/null 2>&1; then \
-		sudo zypper install -y ghostscript ImageMagick rsync ffmpeg; \
+		sudo zypper install -y ghostscript ImageMagick rsync ffmpeg qpdf; \
 	else \
 		echo "Error: No supported package manager found (apt, dnf, yum, pacman, zypper)"; \
 		exit 1; \

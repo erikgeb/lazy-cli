@@ -49,6 +49,7 @@ load 'test_helper'
     assert_output_contains "Usage: lazy pdf"
     assert_output_contains "compress"
     assert_output_contains "merge"
+    assert_output_contains "rotate"
     [ "$status" -eq 0 ]
 }
 

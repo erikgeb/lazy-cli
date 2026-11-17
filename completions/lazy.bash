@@ -6,7 +6,7 @@ _lazy_completions() {
     _init_completion || return
 
     local commands="pdf image video backup doctor version help"
-    local pdf_commands="compress merge"
+    local pdf_commands="compress merge rotate"
     local image_commands="convert"
     local video_commands="convert"
     local backup_commands="home"
@@ -63,6 +63,26 @@ _lazy_completions() {
                                 *)
                                     if [[ "${cur}" == -* ]]; then
                                         COMPREPLY=($(compgen -W "-o --output" -- "${cur}"))
+                                    else
+                                        COMPREPLY=($(compgen -f -X '!*.pdf' -- "${cur}"))
+                                    fi
+                                    ;;
+                            esac
+                            ;;
+                        rotate)
+                            case "${prev}" in
+                                -d|--degrees)
+                                    COMPREPLY=($(compgen -W "90 180 270" -- "${cur}"))
+                                    ;;
+                                -o|--output)
+                                    COMPREPLY=($(compgen -f -- "${cur}"))
+                                    ;;
+                                -p|--pages)
+                                    COMPREPLY=()
+                                    ;;
+                                *)
+                                    if [[ "${cur}" == -* ]]; then
+                                        COMPREPLY=($(compgen -W "-d --degrees -o --output -p --pages" -- "${cur}"))
                                     else
                                         COMPREPLY=($(compgen -f -X '!*.pdf' -- "${cur}"))
                                     fi

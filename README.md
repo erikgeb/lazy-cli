@@ -1,13 +1,13 @@
 # lazy
 
-A CLI tool for common file operations using ghostscript, imagemagick, ffmpeg, and rsync.
+A CLI tool for common file operations using ghostscript, imagemagick, ffmpeg, rsync, and qpdf.
 
 [![Tests](https://github.com/erikgeb/lazy-cli/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/erikgeb/lazy-cli/actions/workflows/test.yml)
 
 ## Installation
 
 ```bash
-# Install system dependencies (ghostscript, imagemagick, rsync)
+# Install system dependencies (ghostscript, imagemagick, ffmpeg, rsync, qpdf)
 make install-deps
 
 # Install the lazy CLI (requires sudo for system directories)
@@ -24,6 +24,9 @@ lazy doctor
 lazy pdf compress document.pdf                    # Compress with default quality
 lazy pdf compress document.pdf -q printer         # High quality compression
 lazy pdf merge file1.pdf file2.pdf -o merged.pdf  # Merge PDFs
+lazy pdf rotate document.pdf                      # Rotate 90 degrees clockwise (metadata only)
+lazy pdf rotate document.pdf -d 180               # Rotate 180 degrees
+lazy pdf rotate *.pdf                             # Rotate all matching PDFs
 
 # Image operations (one `convert` command for format, quality, and resizing)
 lazy image convert *.png                          # Convert to JPG (default, quality 85)
@@ -53,6 +56,14 @@ lazy backup home                                  # Use last volume (if previous
 - `ebook` - medium quality (150 dpi) [default]
 - `printer` - high quality (300 dpi)
 - `prepress` - highest quality, preserves color (300 dpi)
+
+## PDF Rotate Options
+
+Rotate PDF pages clockwise without re-encoding or re-compressing (metadata only).
+
+- `-d, --degrees N` - rotation in degrees clockwise: `90` [default], `180`, `270`
+- `-o, --output FILE` - explicit output path (single input only)
+- `-p, --pages RANGE` - page range to rotate (e.g., `1`, `1-3`, `2-z`, `even`, `odd`; default: all pages)
 
 ## Image `convert` Options
 
@@ -136,3 +147,4 @@ make test
 - imagemagick (for image operations)
 - ffmpeg (for video operations)
 - rsync (for backup operations)
+- qpdf (for PDF rotation)

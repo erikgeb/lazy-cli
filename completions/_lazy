@@ -60,6 +60,9 @@ _lazy_pdf() {
                 merge)
                     _lazy_pdf_merge
                     ;;
+                rotate)
+                    _lazy_pdf_rotate
+                    ;;
             esac
             ;;
     esac
@@ -69,6 +72,7 @@ _lazy_pdf_commands() {
     local commands=(
         'compress:Compress a PDF file'
         'merge:Merge multiple PDF files'
+        'rotate:Rotate PDF pages clockwise'
     )
     _describe 'pdf command' commands
 }
@@ -83,6 +87,14 @@ _lazy_pdf_compress() {
 _lazy_pdf_merge() {
     _arguments \
         '(-o --output)'{-o,--output}'[Output file]:output file:_files -g "*.pdf"' \
+        '*:input files:_files -g "*.pdf"'
+}
+
+_lazy_pdf_rotate() {
+    _arguments \
+        '(-d --degrees)'{-d,--degrees}'[Rotation in degrees clockwise]:degrees:(90 180 270)' \
+        '(-o --output)'{-o,--output}'[Output file]:output file:_files -g "*.pdf"' \
+        '(-p --pages)'{-p,--pages}'[Page range to rotate]:page range:' \
         '*:input files:_files -g "*.pdf"'
 }
 
